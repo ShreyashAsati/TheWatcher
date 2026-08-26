@@ -7,12 +7,9 @@ generated via a forced tool call against a JSON schema that mirrors
 instead of free text that then needs a second parsing pass.
 
 Provider: OpenRouter (https://openrouter.ai), OpenAI-compatible endpoint,
-currently pointed at GLM-5.2's free route. Falls back to a stub if
+pointed at openrouter/free — their auto-router that picks a free model
+per-request, filtered for tool-calling support. Falls back to a stub if
 OPENROUTER_API_KEY isn't set, so the demo runs without credentials.
-
-NOTE: OpenRouter's free-tier model lineup rotates. Check
-https://openrouter.ai/models (filter: Price -> Free) before relying on
-MODEL below still being free-tier — swap the string if it's moved.
 """
 import json
 import os
@@ -20,7 +17,8 @@ import time
 
 from schemas import Idea, Origin, Evidence, EvidenceStatus
 
-MODEL = "openrouter/free"  # OpenRouter's auto-router: picks a free model per-request, filtered for tool-calling support
+MODEL = "openrouter/free"
+EMBEDDING_MODEL = "nvidia/nemotron-3-embed-1b:free"
 BASE_URL = "https://openrouter.ai/api/v1"
 
 _EVIDENCE_SCHEMA = {
@@ -101,39 +99,115 @@ IDEA_TOOL = {
     },
 }
 
+VERIFY_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "submit_verification",
+        "description": "Judge whether a claim is actually supported by the given source records.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "status": {
+                    "type": "string",
+                    "enum": ["fact", "observation", "unverified"],
+                    "description": (
+                        "'fact' if the records directly state this, 'observation' if it's a "
+                        "reasonable conclusion from them, 'unverified' if the records don't "
+                        "actually support the claim (including if they contradict it)."
+                    ),
+                }
+            },
+            "required": ["status"],
+        },
+    },
+}
+
 
 def generate_ideas(prompt: str, origin: Origin, n: int = 1) -> list[Idea]:
     if os.environ.get("OPENROUTER_API_KEY"):
         return _call_openrouter(prompt, origin, n)
     return _stub(prompt, origin, n)
 
-
-def _call_openrouter(prompt: str, origin: Origin, n: int, max_retries: int = 3) -> list[Idea]:
+def embed(texts: list[str]) -> list[list[float]] | None:
+    """One embedding vector per input text, in order. Returns None (not
+    an empty list) when there's no key, so callers can tell 'offline' apart
+    from 'genuinely zero texts' and fall back to something else."""
+    if not os.environ.get("OPENROUTER_API_KEY"):
+        return None
     from openai import OpenAI, RateLimitError
+
+    client = OpenAI(base_url=BASE_URL, api_key=os.environ["OPENROUTER_API_KEY"])
+    for attempt in range(3):
+        try:
+            resp = client.embeddings.create(model=EMBEDDING_MODEL, input=texts)
+            return [d.embedding for d in resp.data]
+        except RateLimitError:
+            if attempt == 2:
+                raise
+            wait = 5 * (attempt + 1)
+            print(f"  (embedding pool rate-limited, retrying in {wait}s...)")
+            time.sleep(wait)
+
+
+def verify_claim(claim: str, records: list[tuple[str, dict]]) -> EvidenceStatus:
+    """Independently checks a claim against the actual memory records it cited —
+    doesn't trust the generating call's own self-reported status."""
+    if not os.environ.get("OPENROUTER_API_KEY"):
+        return EvidenceStatus.UNVERIFIED  # no key: conservative default, not a guess
+    from openai import OpenAI
+
+    client = OpenAI(base_url=BASE_URL, api_key=os.environ["OPENROUTER_API_KEY"])
+    records_text = "\n".join(f"[{rid}]: {content}" for rid, content in records)
+    prompt = (
+        f"Claim: \"{claim}\"\n\nSource records cited as support:\n{records_text}\n\n"
+        "Does the claim actually hold up against these records?"
+    )
+    resp = _call_with_retry(
+        client, prompt, tools=[VERIFY_TOOL],
+        tool_choice={"type": "function", "function": {"name": "submit_verification"}},
+    )
+    message = resp.choices[0].message
+    if not message.tool_calls:
+        return EvidenceStatus.UNVERIFIED  # model didn't judge — don't assume it checked out
+    for call in message.tool_calls:
+        if call.function.name == "submit_verification":
+            args = json.loads(call.function.arguments)
+            return EvidenceStatus(args.get("status", "unverified"))
+    return EvidenceStatus.UNVERIFIED
+
+
+def _call_with_retry(client, prompt: str, tools, tool_choice, max_tokens: int = 4000, max_retries: int = 3):
+    from openai import RateLimitError
+
+    for attempt in range(max_retries):
+        try:
+            return client.chat.completions.create(
+                model=MODEL,
+                max_tokens=max_tokens,
+                tools=tools,
+                tool_choice=tool_choice,
+                messages=[{"role": "user", "content": prompt}],
+            )
+        except RateLimitError:
+            if attempt == max_retries - 1:
+                raise
+            wait = 5 * (attempt + 1)
+            print(f"  (free pool rate-limited, retrying in {wait}s...)")
+            time.sleep(wait)
+
+
+def _call_openrouter(prompt: str, origin: Origin, n: int) -> list[Idea]:
+    from openai import OpenAI
 
     client = OpenAI(base_url=BASE_URL, api_key=os.environ["OPENROUTER_API_KEY"])
     full_prompt = prompt + (
         f"\n\nSubmit exactly {n} idea(s)." if n > 1 else "\n\nSubmit exactly one idea."
     )
-
-    resp = None
-    for attempt in range(max_retries):
-        try:
-            resp = client.chat.completions.create(
-                model=MODEL,
-                max_tokens=12000,
-                tools=[IDEA_TOOL],
-                tool_choice={"type": "function", "function": {"name": "submit_ideas"}},
-                messages=[{"role": "user", "content": full_prompt}],
-            )
-            break
-        except RateLimitError:
-            if attempt == max_retries - 1:
-                raise  # out of retries — let it surface, don't fail silently
-            wait = 5 * (attempt + 1)  # 5s, 10s — matches OpenRouter's own "retry shortly" hint
-            print(f"  (free pool rate-limited, retrying in {wait}s...)")
-            time.sleep(wait)
-
+    resp = _call_with_retry(
+        client, full_prompt, tools=[IDEA_TOOL],
+        tool_choice={"type": "function", "function": {"name": "submit_ideas"}},
+        max_tokens=12000,
+    )
     message = resp.choices[0].message
     if not message.tool_calls:
         print(f"  (no tool call from {resp.model} for {origin.value} lane — got: {message.content!r})")

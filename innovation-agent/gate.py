@@ -4,8 +4,10 @@ redundancy -> relevance -> novelty, in that order (cheapest and most
 disqualifying first), with lane-aware thresholds baked into each check.
 """
 from dataclasses import dataclass
+import math
 
-from schemas import Idea, Origin, PitchStatus
+from schemas import Idea, Origin, PitchStatus, EvidenceStatus
+from llm_client import embed
 
 
 @dataclass
@@ -15,45 +17,70 @@ class GateResult:
     notes: list[str]
 
 
-def _title_similarity(a: str, b: str) -> float:
-    # TODO: replace with real embedding cosine similarity once retrieval
-    # is wired up. Cheap placeholder: word-overlap ratio.
+def _title_word_overlap(a: str, b: str) -> float:
+    # Offline fallback only — used when no OPENROUTER_API_KEY is set, so
+    # redundancy checking degrades instead of silently doing nothing.
     wa, wb = set(a.lower().split()), set(b.lower().split())
     if not wa or not wb:
         return 0.0
     return len(wa & wb) / len(wa | wb)
 
 
+def _cosine_similarity(a: list[float], b: list[float]) -> float:
+    dot = sum(x * y for x, y in zip(a, b))
+    norm_a = math.sqrt(sum(x * x for x in a))
+    norm_b = math.sqrt(sum(y * y for y in b))
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot / (norm_a * norm_b)
+
+
 def check_redundancy(idea: Idea, pitch_history: list[dict]) -> GateResult:
-    for past in pitch_history:
-        if past.get("outcome") == "reject" and _title_similarity(idea.title, past["title"]) > 0.6:
+    rejected = [p for p in pitch_history if p.get("outcome") == "reject"]
+    if not rejected:
+        return GateResult(True, PitchStatus.PENDING, [])
+
+    # One batched call — the idea's title plus every rejected title — not
+    # one call per comparison, since that would multiply API calls by the
+    # size of pitch history for every single idea checked.
+    vectors = embed([idea.title] + [p["title"] for p in rejected])
+
+    if vectors is None:
+        # No key (offline/stub mode): degrade to the crude check rather
+        # than skipping redundancy entirely.
+        for past in rejected:
+            if _title_word_overlap(idea.title, past["title"]) > 0.6:
+                return GateResult(False, PitchStatus.GATED_OUT, [f"too similar to rejected pitch '{past['title']}'"])
+        return GateResult(True, PitchStatus.PENDING, [])
+
+    idea_vec, *rejected_vecs = vectors
+    # TODO: 0.85 is an untested starting guess for cosine similarity on
+    # short titles from this specific model — tune once there's enough
+    # real rejected-pitch history to check it against actual duplicates
+    # and actual non-duplicates.
+    for past, vec in zip(rejected, rejected_vecs):
+        if _cosine_similarity(idea_vec, vec) > 0.85:
             return GateResult(False, PitchStatus.GATED_OUT, [f"too similar to rejected pitch '{past['title']}'"])
     return GateResult(True, PitchStatus.PENDING, [])
 
 
 def check_relevance(idea: Idea, org_snapshot: str) -> GateResult:
-    # Grounded ideas are relevant by construction — they came out of
-    # ARIES's own memory. This check mostly does work for bridged/free.
     if idea.origin == Origin.GROUNDED:
         return GateResult(True, PitchStatus.PENDING, [])
     if not idea.statement.strip():
         return GateResult(False, PitchStatus.GATED_OUT, ["empty statement"])
-    # TODO: real check — embedding similarity or an LLM call asking
-    # whether idea.statement connects to anything in org_snapshot.
     return GateResult(True, PitchStatus.PENDING, [])
 
 
 def check_novelty(idea: Idea) -> GateResult:
     if idea.origin == Origin.FREE:
-        # Judge substance, not evidence — evidence is optional by design
-        # for free-lane pitches, so don't penalize the lack of it here.
         if len(idea.statement.split()) < 8:
             return GateResult(False, PitchStatus.GATED_OUT, ["too thin to be substantive"])
         return GateResult(True, PitchStatus.PENDING, [])
-    # Grounded/bridged: novelty is close to given by construction, but
-    # catch the degenerate case of a statement with no evidence at all.
     if not idea.evidence:
         return GateResult(False, PitchStatus.GATED_OUT, ["no evidence attached for a grounded/bridged pitch"])
+    if all(e.status == EvidenceStatus.UNVERIFIED for e in idea.evidence):
+        return GateResult(False, PitchStatus.GATED_OUT, ["all cited evidence failed independent verification"])
     return GateResult(True, PitchStatus.PENDING, [])
 
 

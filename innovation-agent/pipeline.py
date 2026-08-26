@@ -10,6 +10,7 @@ from memory_interface import MemoryInterface
 from schemas import Pitch
 import lanes
 import gate
+import verification
 
 
 def _to_pitches(ideas, memory: MemoryInterface) -> list[Pitch]:
@@ -17,6 +18,7 @@ def _to_pitches(ideas, memory: MemoryInterface) -> list[Pitch]:
     snapshot = memory.get_org_snapshot()
     pitches = []
     for idea in ideas:
+        idea = verification.verify_idea(idea, memory)
         result = gate.run_gate(idea, history, snapshot)
         pitch = Pitch(
             id=str(uuid.uuid4())[:8],

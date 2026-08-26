@@ -108,6 +108,20 @@ class MockMemory(MemoryInterface):
         ]
         self._pitch_history: list[dict[str, Any]] = []
 
+        # Raw content for the verification loop to check claims against —
+        # mirrors the IDs used elsewhere above, just as prose a model can read.
+        self._records = {
+            "proj-auth-a": "Project proj-auth-a: an auth system. Closed. Failure cause: underestimated OAuth edge cases.",
+            "proj-auth-b": "Project proj-auth-b: an auth system. Closed. Failure cause: underestimated OAuth edge cases.",
+            "proj-ocr-a": "Project proj-ocr-a: ARIES's OCR project. The only project that has used OCR so far.",
+            "proj-rag-a": "Project proj-rag-a: a RAG project.",
+            "proj-rag-b": "Project proj-rag-b: a RAG project.",
+            "proj-rag-c": "Project proj-rag-c: a RAG project.",
+            "proj-rag-d": "Project proj-rag-d: a RAG project.",
+            "proj-callgpt": "Project proj-callgpt: ARIES's WebRTC-based voice pipeline project.",
+            "res-1": "Research entry res-1: 'Weak supervision for document layout understanding' — topic: document understanding.",
+        }
+
     def poll_new_project_closures(self, since: str) -> list[str]:
         return ["proj-auth-b"]
 
@@ -146,6 +160,10 @@ class MockMemory(MemoryInterface):
             if p["id"] == pitch_id:
                 p["outcome"] = outcome
                 p["note"] = note
+
+    def get_record(self, record_id: str) -> Optional[dict[str, Any]]:
+        content = self._records.get(record_id)
+        return {"id": record_id, "content": content} if content else None
 
 
 class LapisAdapter(MemoryInterface):
@@ -245,6 +263,13 @@ class LapisAdapter(MemoryInterface):
     def get_pitch_history(self) -> list[dict[str, Any]]:
         return self._read_notes("pitches")
 
+    @abstractmethod
+    def get_record(self, record_id: str) -> Optional[dict[str, Any]]:
+        """Generic lookup by ID, across whatever record types memory holds
+        (project, research entry, etc). Returns enough content to check a
+        claim against — None if the ID doesn't exist at all, which is
+        itself a meaningful signal (a cited ID that was invented)."""
+
     def write_pitch(self, pitch) -> None:
         folder = self.vault / "pitches"
         folder.mkdir(parents=True, exist_ok=True)
@@ -267,3 +292,12 @@ class LapisAdapter(MemoryInterface):
         fm["outcome_note"] = note
         header = yaml.safe_dump(fm) if yaml else str(fm)
         f.write_text(f"---\n{header}---\n{body}", encoding="utf-8")
+
+    def get_record(self, record_id: str) -> Optional[dict[str, Any]]:
+        # A cited ID could be a project or a research entry — check both
+        # rather than assuming, since evidence can point at either.
+        for subdir in ("projects", "research"):
+            for n in self._read_notes(subdir):
+                if n["_id"] == record_id:
+                    return n
+        return None
