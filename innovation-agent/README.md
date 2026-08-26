@@ -1,4 +1,4 @@
-# Innovation Agent — MVP scaffold
+# Innovation Agent — MVP
 
 Matches the design: three lanes (grounded / bridged / free) all query one
 `MemoryInterface`, every pitch passes through one shared `gate`
@@ -68,8 +68,12 @@ since they "think" before producing the structured output.
 - `llm_client.py`'s free lane (`free_weekly`, asks for 15 ideas per call)
   can exhaust `max_tokens=4000` on reasoning models before ever reaching
   the tool call — needs a bump, untested at what value is actually enough.
+<<<<<<< HEAD
 - When a model ignores the forced tool call entirely, `_call_openrouter`
   currently returns an empty list, indistinguishable from "nothing to
   pitch." A fallback that tries parsing JSON out of `message.content`
   when `tool_calls` is empty would recover cases where the model got the
   content right but used the wrong output channel.
+=======
+- When a model ignores the forced tool call
+>>>>>>> 5c4fadd657354c240547fc9c3fdf97ea07e2654b
