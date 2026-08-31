@@ -1,0 +1,47 @@
+name: Research Agent — Periodic (projects + trending)
+
+on:
+  schedule:
+    # Runs daily; the script itself enforces the real 2-day floor per job
+    # (via MIN_DAYS_BETWEEN_PERIODIC_RUNS) so this is safe to run more often
+    # than that — it'll no-op on the days in between.
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      force_run:
+        description: "Force a full run regardless of the 2-day floor"
+        type: boolean
+        default: false
+
+jobs:
+  run-periodic-jobs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: research-agent/package-lock.json
+
+      - name: Install dependencies
+        working-directory: research-agent
+        run: npm ci
+
+      - name: Run project-relevant + trending jobs
+        working-directory: research-agent
+        env:
+          LAPIS_BASE_URL: ${{ secrets.LAPIS_BASE_URL }}
+          LAPIS_VAULT_ID: ${{ secrets.LAPIS_VAULT_ID }}
+          LAPIS_BEARER_TOKEN: ${{ secrets.LAPIS_BEARER_TOKEN }}
+          LAPIS_PROJECTS_PREFIX: ${{ vars.LAPIS_PROJECTS_PREFIX }}
+          LAPIS_TRENDING_PAGE_PATH: ${{ vars.LAPIS_TRENDING_PAGE_PATH }}
+          LAPIS_AGENT_LOG_PATH: ${{ vars.LAPIS_AGENT_LOG_PATH }}
+          LAPIS_STATE_PATH: ${{ vars.LAPIS_STATE_PATH }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          MIN_DAYS_BETWEEN_PERIODIC_RUNS: ${{ vars.MIN_DAYS_BETWEEN_PERIODIC_RUNS }}
+          FORCE_RUN: ${{ inputs.force_run }}
+        run: npm start -- --job=periodic

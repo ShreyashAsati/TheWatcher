@@ -1,0 +1,49 @@
+name: Research Agent — WhatsApp trigger
+
+on:
+  schedule:
+    # There's no webhook from Lapis, so this polls hourly. The script itself
+    # exits immediately (no LLM/API calls) unless the WhatsApp digest page's
+    # content actually changed since the last run, so most invocations are
+    # nearly free — this is effectively "run when the page updates."
+    # Tighten/loosen the interval to trade off responsiveness vs. Action minutes.
+    - cron: "0 * * * *"
+  workflow_dispatch:
+    inputs:
+      force_run:
+        description: "Force a full run even if the page is unchanged"
+        type: boolean
+        default: false
+
+jobs:
+  run-whatsapp-job:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: research-agent/package-lock.json
+
+      - name: Install dependencies
+        working-directory: research-agent
+        run: npm ci
+
+      - name: Run WhatsApp-triggered job
+        working-directory: research-agent
+        env:
+          LAPIS_BASE_URL: ${{ secrets.LAPIS_BASE_URL }}
+          LAPIS_VAULT_ID: ${{ secrets.LAPIS_VAULT_ID }}
+          LAPIS_BEARER_TOKEN: ${{ secrets.LAPIS_BEARER_TOKEN }}
+          LAPIS_PROJECTS_PREFIX: ${{ vars.LAPIS_PROJECTS_PREFIX }}
+          LAPIS_WHATSAPP_PAGE_PATH: ${{ vars.LAPIS_WHATSAPP_PAGE_PATH }}
+          LAPIS_COMMON_RESEARCH_PAGE_PATH: ${{ vars.LAPIS_COMMON_RESEARCH_PAGE_PATH }}
+          LAPIS_AGENT_LOG_PATH: ${{ vars.LAPIS_AGENT_LOG_PATH }}
+          LAPIS_STATE_PATH: ${{ vars.LAPIS_STATE_PATH }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          FORCE_RUN: ${{ inputs.force_run }}
+        run: npm start -- --job=whatsapp
