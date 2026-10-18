@@ -3,8 +3,8 @@
 Watcher is a bot on a dedicated WhatsApp number that sits in ARIES's
 groups, reads them in batches, organises what it sees into per-group
 Threads, and keeps the club's Lapis wiki current: task/decision/resource
-extraction, thread summaries, and a chat interface members can address
-directly. See [`docs/Spec - Watcher v1.md`](docs/Spec%20-%20Watcher%20v1.md)
+extraction, thread summaries, project and event context routing, and a chat
+interface members can address directly. See [`docs/Spec - Watcher v1.md`](docs/Spec%20-%20Watcher%20v1.md)
 for the full problem statement and design, [`docs/Plan - Watcher v1.md`](docs/Plan%20-%20Watcher%20v1.md)
 for the phase-by-phase build, and [`docs/Architecture.md`](docs/Architecture.md)
 for a diagram of how the pieces talk to each other.
@@ -21,6 +21,7 @@ shared/            cross-cutting packages every agent depends on
   gateway/         gowa I/O: webhook intake, message buffer, send, commands, Member Registry
   wiki/            schema, parser, page editor, Thread Store, Lapis client, lint, templates
   inbox/           agent Inboxes as inbox/<agent>.md on the wiki (ADR-0014)
+  confirmations/   durable member-fact confirmation interfaces
   models/          Decision/Worker/Mentor model tiers, structured output, skills, benchmark
   scheduler/       job registry, run ledger, triggers, locks
   cms/             member lookup (ADR-0009)
@@ -28,8 +29,8 @@ shared/            cross-cutting packages every agent depends on
   db.py            the one SQLite schema (ADR-0005: one app, one database)
   http_adapter.py  thin JSON pass-through over the above, for out-of-process callers
 agents/
-  wa_agent/        batch cutting, thread assignment + revision, lifecycle, Chat Agent, Proposals
-  project_agent/   Item upsert into initiative pages, Status rewrite
+  wa_agent/        batch cutting, thread assignment + revision, lifecycle, fan-out, Chat Agent
+  project_agent/   Project/event Item upsert, Status rewrite, direct query/update runs
   innovation_agent/  FROZEN - see ADR-0010
   research_agent/    FROZEN - see ADR-0010
 skills/            SKILL.md prompt bundles (Chat Agent + benchmark; ingestion
@@ -43,6 +44,16 @@ main.py            composition root - wires agents into the Scheduler,
 
 `AGENTS.md` has the module-boundary rules (each package's `interface.py`
 is its only public surface).
+
+## Agent hand-offs
+
+Project and event channels share the Project Agent workflow. After a thread
+revision, source-grounded project context is posted to the Project Agent
+Inbox, research context is posted to the Research Agent Inbox, and member
+facts wait for a private confirmation before entering a member page's
+`Facts` section. Directly addressed messages can ask the Project Agent to
+read the wider project/event wiki; direct writes never consume the Inbox and
+are limited to Bot Admins and the initiative lead.
 
 ## Running it
 

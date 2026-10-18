@@ -85,10 +85,10 @@ private `OK` reply or reaction before the append-only `Facts` section of a
 member page is changed.
 
 The Chat Agent's direct Project Agent tool is available only for an explicitly
-addressed message. Read queries are broadly available. A direct write is
-performed by `ProjectAgent.run_direct`, never by the WhatsApp Agent, and is
-accepted only from a Bot Admin or the initiative lead. It does not consume the
-Project Agent inbox.
+addressed message. Read queries are broadly available across project and event
+pages. A direct write is performed by `ProjectAgent.run_direct`, never by the
+WhatsApp Agent, and is accepted only from a Bot Admin or the linked initiative
+lead. It does not consume the Project Agent inbox.
 
 `/setup` seeds a new channel without the Gateway knowing about agents:
 once the channel is watched the Gateway reads its history into the

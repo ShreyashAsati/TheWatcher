@@ -23,9 +23,11 @@ Temporary facts retain their validity date; historical facts are dated rather
 than silently removed.
 
 The Chat Agent may read the wiki for any directly addressed request. It may
-delegate a read-only project question to the Project Agent. An immediate
-project write uses a separate direct-run method, does not consume the project
-inbox, and is allowed only for a Bot Admin or the initiative lead.
+delegate a read-only project or event question to the Project Agent, whose
+read path can use the wider project/event pages rather than only the current
+channel. An immediate project or event write uses a separate direct-run
+method, does not consume the corresponding Inbox, and is allowed only for a
+Bot Admin or the initiative lead.
 
 ## Consequences
 

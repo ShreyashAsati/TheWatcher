@@ -79,6 +79,7 @@ whatsapp: unlinked         # linked | unlinked — never an id
 ---
 # Aira
 ## About            human   (areas of interest, background)
+## Facts            append  (member-confirmed, dated facts with source ids)
 ## Projects         derived
 ## Past projects    derived
 ## Open tasks       derived
@@ -200,6 +201,7 @@ Frontmatter: `agent`. Written only through `shared/inbox`.
 ```markdown
 ## Pending          managed   (what the agent still has to do, oldest first)
 - [ ] Thread update: Moving the demo to Friday [kind:: thread_update] [channel:: 1203...@g.us] [slug:: 20260918-demo-date] [since:: 3EB1A2] [thread:: [[channels/watcher/20260918-demo-date]]] [posted:: 2026-09-19T09:45:00+00:00] ^n-4f1a09c2
+- [ ] Project context: Demo moves to Friday [kind:: project_context] [channel:: 1203...@g.us] [target:: Watcher] [src:: 3EB1A2] [thread:: [[channels/watcher/20260918-demo-date]]] [posted:: 2026-09-19T09:45:00+00:00] ^n-7a3e0c1b
 - [ ] Please re-check the budget          ← a human may add a line by hand; it's picked up as a request
 ## Done             managed   (acknowledged after the work succeeded; last 50 kept)
 - [x] Thread update: Booking the hall [kind:: thread_update] … [done:: 2026-09-19T09:47:00+00:00] ^n-77c0e1d3
