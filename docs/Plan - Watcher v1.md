@@ -56,9 +56,9 @@ Implements [[Spec - Watcher v1]]. Each phase ends with something runnable and de
 
 ## Phase 5 — Chat Agent + Project Agent v1 (≈2 weeks)
 **Goal:** members can ask and record; project pages stay current.
-- Mention/reply detection; thread identification; out-of-cycle thread refresh; read-only QA from the wiki in non-initiative channels; quoting replies.
+- Mention/reply detection; thread identification; out-of-cycle thread refresh; read-only QA from the wiki; broad direct Project Agent reads; quoting replies.
 - Proposal flow for writes (reusing Phase 2), ✅ confirmation, text-approval via Decision Model Noul.
-- Project Agent v1: inbox consumption, Item upsert into initiative pages with stable ids, read-back of human edits, `## Status` rewrite, Proposal execution, Events handled identically.
+- Project Agent v1: inbox consumption, Item upsert into project/event initiative pages with stable ids, source-grounded fan-out, member-fact confirmations, read-back of human edits, `## Status` rewrite, guarded direct runs, Proposal execution, Events handled identically.
 - **Exit:** "@bot who owns the hall booking?" answers from the thread; "@bot note the demo moved to Friday" produces a Proposal that a 👍 turns into a Decisions line; project page tasks reflect chat within one batch.
 
 ## Phase 6 — Hardening and handover (≈2 weeks)

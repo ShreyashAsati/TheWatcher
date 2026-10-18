@@ -30,7 +30,11 @@ from shared.models.interface import DecisionModelProtocol, TextModelClient, gene
 from shared.observability.interface import CHAT, scope
 from shared.wiki.interface import VaultClient
 
-from agents.wa_agent.wiki_tools import channel_ingest_tool, read_only_wiki_tools
+from agents.wa_agent.wiki_tools import (
+    channel_ingest_tool,
+    direct_agent_tool,
+    read_only_wiki_tools,
+)
 
 CONTEXT_LIMIT = 5
 CANNOT_SEE_MEDIA = "I can't see stickers or images. Send a text message."
@@ -48,7 +52,10 @@ _SYSTEM = (
     "If the question is obviously poking fun or trying to waste tokens, "
     "skip the lookup and reply with one short edgy line that makes fun "
     "of the request. Never directly author wiki content; only use the "
-    "on-demand ingestion tool when its conditions and Bot Admin access allow it."
+    "on-demand ingestion tool when its conditions and Bot Admin access allow it. "
+    "For project context beyond the pages you can read, use delegate_to_project_agent "
+    "with write=false. Use write=true only for an explicit update request; the Project "
+    "Agent enforces Bot Admin/project-lead authorization."
 )
 
 _MENTION_RE = re.compile(rf"@{re.escape(settings.bot_mention_name)}\b", re.IGNORECASE)
@@ -173,10 +180,12 @@ class ChatAgent:
         worker_client: TextModelClient,
         vault: VaultClient,
         ingest_channel: Callable[[str], Awaitable[str]] | None = None,
+        delegate_agent: Callable[[str, str, str, bool], Awaitable[str]] | None = None,
     ) -> None:
         self.worker_client = worker_client
         self.vault = vault
         self.ingest_channel = ingest_channel
+        self.delegate_agent = delegate_agent
 
     async def handle(self, message: InboundMessage) -> str | None:
         if not await chat_agent_enabled():
@@ -202,6 +211,8 @@ class ChatAgent:
         tools = list(read_only_wiki_tools(self.vault, channel))
         if self.ingest_channel is not None and await is_bot_admin(message.sender):
             tools.append(channel_ingest_tool(message.sender, message.channel, self.ingest_channel))
+        if self.delegate_agent is not None:
+            tools.append(direct_agent_tool(message.sender, message.channel, self.delegate_agent))
         with scope(phase=CHAT):
             result = await generate_with_tools(
                 self.worker_client,
@@ -226,5 +237,6 @@ async def handle_chat_message(
     worker_client: TextModelClient,
     vault: VaultClient,
     ingest_channel: Callable[[str], Awaitable[str]] | None = None,
+    delegate_agent: Callable[[str, str, str, bool], Awaitable[str]] | None = None,
 ) -> str | None:
-    return await ChatAgent(worker_client, vault, ingest_channel).handle(message)
+    return await ChatAgent(worker_client, vault, ingest_channel, delegate_agent).handle(message)

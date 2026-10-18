@@ -25,6 +25,7 @@ from shared.wiki.interface import StoredThread, ThreadChange, ThreadDraft, Threa
 
 from agents.wa_agent.assign import CHATTER, NEW_THREAD, SenderNames, assign_batch
 from agents.wa_agent.assign_jev import ThreadDecider, assign_with_jev
+from agents.wa_agent.fanout import FanoutDispatcher
 from agents.wa_agent.messages import BufferedMessage, ThreadInfo
 from agents.wa_agent.revise import revise_thread
 
@@ -214,11 +215,13 @@ class IngestionPipeline:
         worker_client: TextModelClient,
         assign_client: TextModelClient | None = None,
         decider: ThreadDecider | None = None,
+        fanout: FanoutDispatcher | None = None,
     ) -> None:
         self.vault = vault
         self.worker_client = worker_client
         self.assign_client = assign_client or worker_client
         self.decider = decider
+        self.fanout = fanout or FanoutDispatcher(vault)
 
     async def run_scheduled(
         self, channel_jid: str, now: datetime | None = None
@@ -318,7 +321,7 @@ class IngestionPipeline:
             if key == CHATTER:
                 result.chatter_count += len(bucket)
                 continue
-            thread, created, revived = await self._write_bucket(
+            thread, created, revived, fanout = await self._write_bucket(
                 store, names, key, bucket, assignment.new_threads
             )
             result.model_calls += 1
@@ -329,6 +332,11 @@ class IngestionPipeline:
                 result.threads_updated.append(thread.slug)
                 if revived:
                     result.threads_revived.append(thread.slug)
+            if fanout:
+                try:
+                    await self.fanout.dispatch(channel, thread, fanout)
+                except Exception:  # noqa: BLE001 - fan-out is durable and retried independently
+                    logger.exception("fan-out dispatch failed for %s", thread.slug)
 
         if result.threads_created or result.threads_updated:
             await store.reindex()
@@ -340,7 +348,7 @@ class IngestionPipeline:
 
     async def _write_bucket(
         self, store, names, key, bucket, new_threads
-    ) -> tuple[StoredThread, bool, bool]:
+    ) -> tuple[StoredThread, bool, bool, list]:
         if key.startswith(f"{NEW_THREAD}:"):
             revision = await revise_thread(self.worker_client, bucket, names, minted=new_threads[key])
             thread = await store.create(
@@ -355,7 +363,7 @@ class IngestionPipeline:
                     last_message_at=revision.last_message_at,
                 )
             )
-            return thread, True, False
+            return thread, True, False, revision.fanout
         revision = await revise_thread(self.worker_client, bucket, names, current=await store.get(key))
         thread, revived = await store.revise(
             key,
@@ -369,7 +377,7 @@ class IngestionPipeline:
                 last_message_at=revision.last_message_at,
             ),
         )
-        return thread, False, revived
+        return thread, False, revived, revision.fanout
 
 
 async def run_batch(
@@ -380,9 +388,10 @@ async def run_batch(
     force: bool = False,
     assign_client: TextModelClient | None = None,
     decider: ThreadDecider | None = None,
+    fanout: FanoutDispatcher | None = None,
 ) -> BatchResult | None:
     """Compatibility wrapper. Prefer `IngestionPipeline.run_scheduled` / `run_forced`."""
-    pipeline = IngestionPipeline(vault, worker_client, assign_client, decider)
+    pipeline = IngestionPipeline(vault, worker_client, assign_client, decider, fanout)
     if force:
         return await pipeline.run_forced(channel_jid)
     return await pipeline.run_scheduled(channel_jid, now)

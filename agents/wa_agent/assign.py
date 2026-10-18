@@ -44,6 +44,7 @@ from agents.wa_agent.assign_models import (
     Assignment,
     AssignmentResponse,
     AssignmentResult,
+    FanoutCandidate,
     ItemOut,
     NewThread,
     SenderNames,
@@ -58,6 +59,7 @@ __all__ = [
     "AssignmentResponse",
     "AssignmentResult",
     "ItemOut",
+    "FanoutCandidate",
     "NewThread",
     "SenderNames",
     "ThreadUpdate",
@@ -135,7 +137,14 @@ THREAD_UPDATE_SYSTEM_PROMPT = (
     "messages. Chatter yields no item. Every item needs src_ids from the messages it comes from. "
     "owner (for a task) or the asker (for a question) goes in owner, and only as a [[wikilink]] "
     "listed under 'Members'; leave it null if unsure. A decision is done; a task is done only when the "
-    "messages say so. due is YYYY-MM-DD and only when a date is actually given.\n\n"
+    "messages say so. due is YYYY-MM-DD and only when a date is actually given.\n"
+    "fanout: optional source-grounded statements for other agents. Use route=project for a named "
+    "project or event, route=research for durable research context, and route=member_fact only for "
+    "a personal fact explicitly stated by a linked member. Every fanout item needs src_ids. For "
+    "member_fact, member_title must be one of the linked Members and temporal_scope must distinguish "
+    "temporary, historical, ongoing, or unknown. Do not infer sensitive facts, diagnoses, identity, "
+    "or private details; only repeat what the member explicitly said. Return an empty list when no "
+    "durable fanout is justified.\n\n"
     f"Some messages are from the bot itself ({settings.bot_mention_name}) - its proposals, "
     "confirmations, question prompts and status notices. Those are the bot's own bookkeeping, "
     "not what the group discussed: never make an item out of one, and leave them out of the "
@@ -671,7 +680,9 @@ def build_thread_update_prompt(
         f"Current summary:\n{linked_summary or '(none yet)'}\n\n"
         f"Current items (reuse an item's ^block_id when it is the same item):\n{existing_items}\n\n"
         f"Members (the only names allowed in owner): {members_line}\n\n"
-        f"New messages:\n{new_lines}"
+        f"New messages:\n{new_lines}\n\n"
+        "Fanout policy: return only source-grounded durable context. Do not treat questions, jokes, "
+        "speculation, or temporary logistics without an end date as facts."
     )
 
 

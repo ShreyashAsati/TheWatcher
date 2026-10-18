@@ -25,7 +25,7 @@ flowchart TB
         GW["shared/gateway<br/>webhook intake, message buffer,<br/>send, commands, Member Registry"]
         DB[("SQLite<br/>messages_buffer, channels, proposals,<br/>members_registry, jobs/runs, model_calls")]
         SCHED["shared/scheduler<br/>job registry, run ledger,<br/>per-key locks, retries"]
-        WAAGENT["agents/wa_agent<br/>batch cutter, structured thread<br/>assignment + revision, lifecycle,<br/>Chat Agent, Proposals"]
+        WAAGENT["agents/wa_agent<br/>batch cutter, structured thread<br/>assignment + revision, fan-out,<br/>Chat Agent, Proposals"]
         PAAGENT["agents/project_agent<br/>Item upsert, Status rewrite"]
         MODELS["shared/models<br/>Decision (Jev) / Worker / Mentor,<br/>structured output, skills, benchmark"]
         WIKI["shared/wiki<br/>schema, parser, page editor,<br/>Thread Store, lint, templates"]
@@ -45,7 +45,10 @@ flowchart TB
         PAAGENT -->|pending, ack| INBOX
         INBOX --> WIKI
         INBOX -.->|triggering item:<br/>request_run| SCHED
+        CONF["shared/confirmations<br/>private member-fact waits"]
         PAAGENT --> WIKI
+        WAAGENT --> CONF
+        CONF -->|scoped DM confirmation| GW
         WAAGENT -->|Proposal confirm,<br/>link_member| GW
         WAAGENT --> CMS
         HTTP --> GW
@@ -73,6 +76,19 @@ writes Threads only through the Thread Store, and changes any page only
 through the page editor, which enforces Section Owners and Fences. An
 agent's Inbox is its page `inbox/<agent>.md`, reached only through
 `shared/inbox` (ADR-0014).
+
+During thread revision the Worker can return source-grounded fan-out
+candidates. Project and research candidates are durable Inbox items; the
+Research Agent's inbox is populated but its consumer remains frozen under
+ADR-0010. Member facts are held in `shared/confirmations` and require a
+private `OK` reply or reaction before the append-only `Facts` section of a
+member page is changed.
+
+The Chat Agent's direct Project Agent tool is available only for an explicitly
+addressed message. Read queries are broadly available across project and event
+pages. A direct write is performed by `ProjectAgent.run_direct`, never by the
+WhatsApp Agent, and is accepted only from a Bot Admin or the linked initiative
+lead. It does not consume the Project Agent inbox.
 
 `/setup` seeds a new channel without the Gateway knowing about agents:
 once the channel is watched the Gateway reads its history into the

@@ -1,7 +1,7 @@
 # WA Agent
 
-Ingestion (batch cutting, thread assignment, thread writing) and the Chat
-Agent (mention handling, Proposal writes). See
+Ingestion (batch cutting, thread assignment, thread writing, and fan-out) and
+the Chat Agent (mention handling, wiki reads, and guarded delegation). See
 [`docs/Spec - Watcher v1.md`](../../docs/Spec%20-%20Watcher%20v1.md)
 ("WhatsApp Agent — ingestion" / "— Chat Agent") and
 [`docs/Plan - Watcher v1.md`](../../docs/Plan%20-%20Watcher%20v1.md)
@@ -28,15 +28,21 @@ ADR-0003).
   loop and item rendering in `assign.py`. Prompts are constants, not
   skills.
 - `revise.py` — title/summary guards and the thread-update orchestration.
+- `fanout.py` — routes source-grounded project and research context to
+  Inboxes and sends member facts into the confirmation workflow.
+- `member_facts.py` — stores pending member-page facts and applies them only
+  after an identity-scoped DM reply or reaction.
 - `chat.py` — trigger is an @mention (`@watcher` or WhatsApp's
   `@<bot number>`) or a reply to one of the bot's own messages. Replies
   stay off until a Bot Admin sends `/toggle-agent`. Context
   is the last 5 messages plus any message those five reply to.
   Read-only wiki tools (list this channel's threads, search, read a
-  page) when that isn't enough. Bot Admins also get an on-demand ingest
+  page) when that isn't enough. Directly addressed messages also get a
+  read-only Project Agent delegation tool. Bot Admins get an on-demand ingest
   tool for any watched channel; it uses the normal ingestion pipeline and
   shared scheduler lock. Media-only mentions and replies get a canned
-  "can't see that" reply.
+  "can't see that" reply. Ordinary DMs are rejected; only pending member-fact
+  confirmations reach the scoped DM hooks.
 - `wiki_tools.py` — the Chat Agent's wiki lookup tools and admin-only
   channel-ingest tool. Thread listings are ordered by most recent message.
 - `lifecycle.py` — daily stale/archive pass and the Sunday nudge.

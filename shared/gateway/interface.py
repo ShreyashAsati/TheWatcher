@@ -36,6 +36,8 @@ from shared.gateway.command_handlers import (
 from shared.gateway.command_handlers import (
     link,
     status,
+)
+from shared.gateway.command_handlers import (
     trigger_ingest as _trigger_ingest,
 )
 from shared.gateway.onboarding import SETUP_STEPS, continue_setup_session, setup, unwatch
@@ -43,6 +45,8 @@ from shared.gateway.proposals import ProposalRecord, ProposalStore
 from shared.gateway.runtime import (
     ChannelIngestHook,
     ChannelWatchedHook,
+    DirectMessageHook,
+    DirectReactionHook,
     GatewayRuntime,
     HealthLine,
     HookRegistry,
@@ -67,6 +71,15 @@ def register_message_hook(hook: MessageHook) -> None:
 
 def register_reaction_hook(hook: ReactionHook) -> None:
     runtime.hooks.register_reaction_hook(hook)
+
+
+def register_direct_message_hook(hook: DirectMessageHook) -> None:
+    """Register a hook for a sender with an active private confirmation."""
+    runtime.hooks.register_direct_message_hook(hook)
+
+
+def register_direct_reaction_hook(hook: DirectReactionHook) -> None:
+    runtime.hooks.register_direct_reaction_hook(hook)
 
 
 def register_channel_watched_hook(hook: ChannelWatchedHook) -> None:
@@ -159,6 +172,8 @@ __all__ = [
     "runtime",
     "register_message_hook",
     "register_reaction_hook",
+    "register_direct_message_hook",
+    "register_direct_reaction_hook",
     "register_channel_watched_hook",
     "register_channel_ingest_hook",
     "ChannelWatchedHook",

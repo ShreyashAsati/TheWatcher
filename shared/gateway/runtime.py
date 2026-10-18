@@ -22,6 +22,8 @@ logger = logging.getLogger(__name__)
 
 MessageHook = Callable[[InboundMessage], Awaitable[None]]
 ReactionHook = Callable[[str, str | None, str | None], Awaitable[object]]
+DirectMessageHook = Callable[[InboundMessage], Awaitable[None]]
+DirectReactionHook = Callable[[str, str | None, str | None], Awaitable[object]]
 HealthLine = Callable[[], Awaitable[str]]
 ChannelIngestHook = Callable[[str], Awaitable[str]]
 # Fired once a channel has been set up and its history imported, with the
@@ -42,6 +44,8 @@ class HookRegistry:
     def __init__(self) -> None:
         self.message_hooks: list[MessageHook] = []
         self.reaction_hooks: list[ReactionHook] = []
+        self.direct_message_hooks: list[DirectMessageHook] = []
+        self.direct_reaction_hooks: list[DirectReactionHook] = []
         self.channel_watched_hooks: list[ChannelWatchedHook] = []
         self.health_lines: list[HealthLine] = []
         self.channel_ingest_hooks: list[ChannelIngestHook] = []
@@ -51,6 +55,12 @@ class HookRegistry:
 
     def register_reaction_hook(self, hook: ReactionHook) -> None:
         self.reaction_hooks.append(hook)
+
+    def register_direct_message_hook(self, hook: DirectMessageHook) -> None:
+        self.direct_message_hooks.append(hook)
+
+    def register_direct_reaction_hook(self, hook: DirectReactionHook) -> None:
+        self.direct_reaction_hooks.append(hook)
 
     def register_channel_watched_hook(self, hook: ChannelWatchedHook) -> None:
         self.channel_watched_hooks.append(hook)
@@ -64,6 +74,8 @@ class HookRegistry:
     def clear(self) -> None:
         self.message_hooks.clear()
         self.reaction_hooks.clear()
+        self.direct_message_hooks.clear()
+        self.direct_reaction_hooks.clear()
         self.channel_watched_hooks.clear()
         self.health_lines.clear()
         self.channel_ingest_hooks.clear()

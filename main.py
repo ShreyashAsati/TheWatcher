@@ -14,9 +14,10 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 import uvicorn
-from agents.project_agent.interface import run_project_agent_once
+from agents.project_agent.interface import run_project_agent_direct, run_project_agent_once
 from agents.wa_agent.interface import (
     IngestionPipeline,
+    MemberFactService,
     expire_stale_proposals,
     handle_chat_message,
     handle_reaction,
@@ -37,6 +38,8 @@ from shared.gateway.interface import (
     pending_messages,
     register_channel_ingest_hook,
     register_channel_watched_hook,
+    register_direct_message_hook,
+    register_direct_reaction_hook,
     register_health_line,
     register_message_hook,
     register_reaction_hook,
@@ -100,6 +103,8 @@ class WatcherApplication:
 
     def setup(self) -> None:
         register_message_hook(self._chat_hook)
+        register_direct_message_hook(self._direct_message_hook)
+        register_direct_reaction_hook(self._direct_reaction_hook)
         register_channel_ingest_hook(self._ingest_channel_on_demand)
         register_reaction_hook(handle_reaction)
         register_channel_watched_hook(self._channel_watched_hook)
@@ -160,6 +165,24 @@ class WatcherApplication:
             wa_worker_model(),
             default_vault_client(),
             self._ingest_channel_on_demand,
+            self._delegate_agent,
+        )
+
+    async def _delegate_agent(
+        self, requester: str, channel_jid: str, task: str, write: bool
+    ) -> str:
+        return await run_project_agent_direct(
+            default_vault_client(), worker_model(), channel_jid, task, requester, write=write
+        )
+
+    async def _direct_message_hook(self, message: InboundMessage) -> None:
+        await MemberFactService(default_vault_client()).handle_message(message)
+
+    async def _direct_reaction_hook(
+        self, sender: str, reacted_message_id: str | None, emoji: str | None
+    ) -> None:
+        await MemberFactService(default_vault_client()).handle_reaction(
+            sender, reacted_message_id, emoji
         )
 
     async def _ingest_channel_on_demand(self, channel_jid: str) -> str:

@@ -130,6 +130,55 @@ class Proposal(Base):
     resolved_by: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
+class PendingWikiUpdate(Base):
+    """A source-grounded member fact waiting for the member's confirmation.
+
+    This is deliberately separate from ``proposals``. Proposals are group
+    admin workflows, while member facts are private, identity-scoped waits.
+    """
+
+    __tablename__ = "pending_wiki_updates"
+    __table_args__ = (UniqueConstraint("dedupe_key", name="uq_pending_wiki_update_dedupe"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    dedupe_key: Mapped[str] = mapped_column(String, index=True)
+    member_identity: Mapped[str] = mapped_column(String, index=True)
+    member_title: Mapped[str] = mapped_column(String)
+    fact: Mapped[str] = mapped_column(Text)
+    source_ids: Mapped[str] = mapped_column(Text)
+    source_channel: Mapped[str] = mapped_column(String)
+    source_thread: Mapped[str | None] = mapped_column(String, nullable=True)
+    temporal_scope: Mapped[str] = mapped_column(String, default="ongoing")
+    valid_until: Mapped[str | None] = mapped_column(String, nullable=True)
+    sensitive: Mapped[bool] = mapped_column(default=False)
+    status: Mapped[str] = mapped_column(String, default="pending", index=True)
+    wiki_path: Mapped[str] = mapped_column(String)
+    rendered_line: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_by: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+class MemberFactConfirmation(Base):
+    """The private WhatsApp confirmation message for one pending update."""
+
+    __tablename__ = "member_fact_confirmations"
+    __table_args__ = (
+        UniqueConstraint("confirmation_message_id", name="uq_member_fact_confirmation_message"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    update_id: Mapped[int] = mapped_column(index=True)
+    member_identity: Mapped[str] = mapped_column(String, index=True)
+    dm_channel: Mapped[str] = mapped_column(String)
+    confirmation_message_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    status: Mapped[str] = mapped_column(String, default="pending", index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_by: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
 class OutboundLog(Base):
     """Every send, mirrored to meta/audit/<yyyy-mm>.md by the wiki layer
     once it exists (Phase 1+); this table is the source of truth for it."""

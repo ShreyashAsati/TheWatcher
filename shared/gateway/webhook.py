@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from shared.config import settings
+from shared.confirmations.interface import get_confirmation_for_message, get_pending_confirmation
 from shared.db import MessageBuffer, get_session
 from shared.gateway.buffer import to_inbound
 from shared.gateway.channels import is_allowlisted, is_bot_admin
@@ -50,11 +51,20 @@ async def receive_webhook(raw_body: bytes, signature: str | None, runtime: Gatew
     channel = event.chat_id or "unknown"
     if not message_id:
         return False
-    if not is_group_jid(channel):
-        return False
+    is_group = is_group_jid(channel)
+    scoped_dm = False
+    if not is_group and event.sender:
+        if event.event_type == "message":
+            scoped_dm = await get_pending_confirmation(event.sender, channel) is not None
+        elif event.event_type == "message.reaction" and event.reacted_message_id:
+            confirmation = await get_confirmation_for_message(event.reacted_message_id)
+            scoped_dm = confirmation is not None and confirmation.member_identity == event.sender
+        if not scoped_dm:
+            return False
 
     is_admin_command = bool(
-        event.sender
+        is_group
+        and event.sender
         and event.text
         and event.text.strip().startswith("/")
         and await is_bot_admin(event.sender)
@@ -68,7 +78,7 @@ async def receive_webhook(raw_body: bytes, signature: str | None, runtime: Gatew
         and await has_setup_session(channel, event.sender)
     )
     is_setup_input = is_admin_command or is_setup_reply
-    if not is_setup_input and not await is_allowlisted(channel):
+    if not scoped_dm and not is_setup_input and not await is_allowlisted(channel):
         return False
 
     async with get_session() as session:
@@ -96,6 +106,14 @@ async def receive_webhook(raw_body: bytes, signature: str | None, runtime: Gatew
             await session.rollback()
             return False
 
+    if scoped_dm:
+        if event.event_type == "message":
+            await _dispatch_direct_message(runtime, to_inbound(buffered), buffered.id)
+        elif event.event_type == "message.reaction" and event.sender:
+            await _dispatch_direct_reaction(
+                runtime, event.sender, event.reacted_message_id, event.reaction_emoji, buffered.id
+            )
+        return True
     if is_setup_input:
         await _dispatch_admin_command(
             runtime, channel, event.sender, event.text, buffered.id, event.mentions
@@ -157,3 +175,37 @@ async def _dispatch_message(runtime: GatewayRuntime, buffered: MessageBuffer) ->
             await hook(message)
         except Exception:  # noqa: BLE001 - a broken hook must not break intake
             logger.exception("message hook %r failed for channel %s", hook, message.channel)
+
+
+async def _dispatch_direct_message(
+    runtime: GatewayRuntime, message, buffer_id: int
+) -> None:
+    for hook in runtime.hooks.direct_message_hooks:
+        try:
+            await hook(message)
+        except Exception:  # noqa: BLE001 - a broken confirmation hook must not break intake
+            logger.exception("direct message hook failed for %s", message.channel)
+    async with get_session() as session:
+        row = await session.get(MessageBuffer, buffer_id)
+        if row is not None:
+            row.processed = True
+            await session.commit()
+
+
+async def _dispatch_direct_reaction(
+    runtime: GatewayRuntime,
+    sender: str,
+    reacted_message_id: str | None,
+    emoji: str | None,
+    buffer_id: int,
+) -> None:
+    for hook in runtime.hooks.direct_reaction_hooks:
+        try:
+            await hook(sender, reacted_message_id, emoji)
+        except Exception:  # noqa: BLE001 - a broken confirmation hook must not break intake
+            logger.exception("direct reaction hook failed for %s", sender)
+    async with get_session() as session:
+        row = await session.get(MessageBuffer, buffer_id)
+        if row is not None:
+            row.processed = True
+            await session.commit()
