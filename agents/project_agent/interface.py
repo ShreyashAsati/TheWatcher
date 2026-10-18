@@ -18,10 +18,25 @@ async def run_project_agent_once(vault: VaultClient, worker_client: TextModelCli
     return await ProjectAgent(vault, worker_client).run_once()
 
 
+async def run_project_agent_direct(
+    vault: VaultClient,
+    worker_client: TextModelClient,
+    channel_jid: str,
+    task: str,
+    requester: str,
+    *,
+    write: bool = False,
+) -> str:
+    return await ProjectAgent(vault, worker_client).run_direct(
+        channel_jid, task, requester, write=write
+    )
+
+
 __all__ = [
     "ApplyResult",
     "ProjectAgent",
     "apply_thread_items_to_initiative",
     "rewrite_status",
     "run_project_agent_once",
+    "run_project_agent_direct",
 ]

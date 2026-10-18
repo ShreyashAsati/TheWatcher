@@ -34,7 +34,7 @@ import re
 from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from shared.wiki.interface import (
     ConflictError,
@@ -73,6 +73,8 @@ class InboxPost(BaseModel):
     thread_slug: str | None = None
     thread_link: str | None = None
     since: str | None = None
+    target: str | None = None
+    source_ids: list[str] = Field(default_factory=list)
 
 
 class InboxItem(InboxPost):
@@ -148,6 +150,10 @@ def _to_line(item: InboxItem, done_at: datetime | None = None) -> str:
             fields[key] = value
     if item.thread_link:
         fields["thread"] = f"[[{item.thread_link}]]"
+    if item.target:
+        fields["target"] = item.target
+    if item.source_ids:
+        fields["src"] = ", ".join(item.source_ids)
     if item.trigger:
         fields["trigger"] = "now"
     if item.posted_at:
@@ -181,6 +187,8 @@ def _from_line(line: str) -> InboxItem | None:
         thread_slug=f.get("slug"),
         thread_link=f["thread"].strip("[]") if f.get("thread") else None,
         since=f.get("since"),
+        target=f.get("target"),
+        source_ids=[item.strip() for item in f.get("src", "").split(",") if item.strip()],
         posted_at=posted,
     )
 
@@ -188,8 +196,14 @@ def _from_line(line: str) -> InboxItem | None:
 def _same_subject(a: InboxPost, b: InboxPost) -> bool:
     return (
         a.kind == b.kind
-        and a.thread_slug is not None
-        and (a.channel, a.thread_slug) == (b.channel, b.thread_slug)
+        and (
+            (a.thread_slug is not None and (a.channel, a.thread_slug) == (b.channel, b.thread_slug))
+            or (
+                a.thread_slug is None
+                and a.target is not None
+                and (a.channel, a.target) == (b.channel, b.target)
+            )
+        )
     )
 
 
@@ -261,6 +275,8 @@ class Inbox:
                     existing.trigger = existing.trigger or post.trigger
                     existing.thread_link = post.thread_link or existing.thread_link
                     existing.since = existing.since or post.since
+                    existing.target = post.target or existing.target
+                    existing.source_ids = list(dict.fromkeys([*existing.source_ids, *post.source_ids]))
                     continue
                 seed = f"{post.kind}|{post.channel}|{post.thread_slug}|{post.text}|{now.isoformat()}"
                 pending.append(InboxItem(**post.model_dump(), id=_mint_id(seed), posted_at=now))

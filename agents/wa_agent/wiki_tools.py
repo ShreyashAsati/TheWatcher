@@ -54,6 +54,24 @@ def channel_ingest_tool(
     return ingest_channel
 
 
+def direct_agent_tool(
+    requester: str,
+    current_channel_jid: str,
+    run_agent: Callable[[str, str, str, bool], Awaitable[str]],
+) -> Callable[..., object]:
+    """Build the explicitly addressed Project Agent delegation tool."""
+
+    async def delegate_to_project_agent(task: str, write: bool = False) -> str:
+        """Ask the Project Agent about the current project, or request an
+        immediate update when write=true. Use this only for an explicit
+        Watcher mention or reply."""
+        if not task.strip():
+            return "The Project Agent needs a question or task."
+        return await run_agent(requester, current_channel_jid, task.strip(), write)
+
+    return delegate_to_project_agent
+
+
 async def list_threads(vault: VaultClient, channel: ChannelInfo | None) -> str:
     if channel is None:
         return "This WhatsApp group is not a watched channel, so it has no wiki threads."

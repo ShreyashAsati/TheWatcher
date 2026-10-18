@@ -12,7 +12,9 @@ are explicitly out of v1 scope — see
 ## Layout
 
 - `interface.py` — public surface: `run_project_agent_once`,
-  `apply_thread_items_to_initiative`, `rewrite_status`.
+  `run_project_agent_direct`, `apply_thread_items_to_initiative`,
+  `rewrite_status`.
 - `agent.py` — `ProjectAgent` (inbox consumption) and one handler per
-  item kind (task / decision / resource / question). `_merge_item` stays
+  item kind (task / decision / resource / question). The direct path answers
+  reads and performs only explicitly authorized writes. `_merge_item` stays
   a pure policy function (`merge_item`).

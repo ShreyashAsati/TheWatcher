@@ -38,10 +38,40 @@ class ItemOut(BaseModel):
     block_id: str | None = Field(default=None, description="Reuse an existing item's ^id when updating it")
 
 
+class FanoutCandidate(BaseModel):
+    """A source-grounded fact/context item for another agent.
+
+    The model may identify a destination, but the application validates the
+    source ids and member target before anything is delivered or written.
+    """
+
+    route: Literal["project", "research", "member_fact"]
+    text: str = Field(description="A concise fact or context statement grounded in source messages")
+    src_ids: list[str] = Field(default_factory=list, description="Message ids supporting this statement")
+    target: str | None = Field(default=None, description="Project or event title when explicitly named")
+    member_title: str | None = Field(default=None, description="Linked member title for member_fact")
+    member_identity: str | None = Field(
+        default=None, description="Filled by the application, never guessed by the model"
+    )
+    temporal_scope: Literal["ongoing", "temporary", "historical", "unknown"] = "unknown"
+    valid_until: str | None = Field(
+        default=None, description="YYYY-MM-DD only when the message gives an end date"
+    )
+    sensitive: bool = Field(
+        default=False, description="Sensitive personal fact; always requires confirmation"
+    )
+
+
 class ThreadUpdate(BaseModel):
     title: str
     summary: str
     items: list[ItemOut] = []
+    fanout: list[FanoutCandidate] = Field(
+        default_factory=list,
+        description=(
+            "Optional source-grounded context for project, research, or member confirmation workflows"
+        ),
+    )
 
 
 @dataclass

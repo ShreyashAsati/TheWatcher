@@ -134,6 +134,7 @@ SCHEMA_BY_TYPE: dict[str, type[Frontmatter]] = {
 SECTION_OWNERS: dict[str, dict[str, Owner]] = {
     "member": {
         "About": "human",
+        "Facts": "append",
         "Projects": "derived",
         "Past projects": "derived",
         "Open tasks": "derived",

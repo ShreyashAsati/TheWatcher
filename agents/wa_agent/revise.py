@@ -18,13 +18,13 @@ Internal to `agents/wa_agent`; `interface.py` re-exports the public names.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from shared.models.interface import TextModelClient
 from shared.wiki.interface import StoredThread, apply_member_wikilinks, format_timeline_line
 
-from agents.wa_agent.assign import NewThread, SenderNames, update_thread
+from agents.wa_agent.assign import FanoutCandidate, NewThread, SenderNames, update_thread
 from agents.wa_agent.messages import BufferedMessage
 
 TITLE_MAX_WORDS = 5
@@ -43,6 +43,7 @@ class ThreadRevision:
     message_ids: list[str]
     opened_at: datetime
     last_message_at: datetime
+    fanout: list[FanoutCandidate] = field(default_factory=list)
 
 
 # --------------------------------------------------------------------------
@@ -160,6 +161,39 @@ async def revise_thread(
         model, seed_title, seed_summary, items_body, messages, names, set(batch_ids) | known_ids
     )
     aliases = names.wikilink_aliases(messages)
+    valid_ids = set(batch_ids)
+    fanout: list[FanoutCandidate] = []
+    for candidate in update.fanout:
+        source_ids = list(dict.fromkeys(src for src in candidate.src_ids if src in valid_ids))
+        text = re.sub(r"\s+", " ", candidate.text or "").strip()
+        if not text or not source_ids:
+            continue
+        if candidate.route == "member_fact":
+            if not candidate.member_title or candidate.member_title not in names.member_titles(messages):
+                continue
+            sources = set(source_ids)
+            identity = next(
+                (
+                    message.sender
+                    for message in messages
+                    if names.members.get(message.sender) == candidate.member_title
+                    and sources.intersection(message.src_ids)
+                ),
+                None,
+            )
+            if identity is None:
+                continue
+            fanout.append(
+                candidate.model_copy(
+                    update={
+                        "text": text,
+                        "src_ids": source_ids,
+                        "member_identity": identity,
+                    }
+                )
+            )
+        else:
+            fanout.append(candidate.model_copy(update={"text": text, "src_ids": source_ids}))
     return ThreadRevision(
         title=choose_title(update.title, seed_title, messages[0].text),
         summary=apply_member_wikilinks(clean_summary(update.summary) or seed_summary, aliases),
@@ -169,4 +203,5 @@ async def revise_thread(
         message_ids=batch_ids,
         opened_at=messages[0].when,
         last_message_at=messages[-1].when,
+        fanout=fanout,
     )

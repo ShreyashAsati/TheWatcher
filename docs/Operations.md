@@ -105,6 +105,14 @@ process start, so `docker compose up -d` after editing it is enough.
   ingestion and backfill; if any ingestion already holds that lock, it
   reports that ingestion is running. The normal batch size and the
   pipeline's drain safety limit still apply.
+
+After thread re-summarisation, source-grounded project context is queued in
+the Project Agent inbox and research context is queued in the frozen Research
+Agent inbox. A linked member fact is sent privately for confirmation; an `OK`
+reply or any reaction confirms it, while ordinary DMs remain rejected. A
+directly addressed project query can be answered from the wiki. An immediate
+project write is performed by the Project Agent only for a Bot Admin or the
+initiative lead and does not consume the inbox.
 - `/setup-members` - list this group's WhatsApp members, fuzzy-match
   each display name against the ARIES member roster, and link the
   confident ones. Everyone else is printed (with the roster's titles)

@@ -5,6 +5,7 @@ lives in package-private modules; callers keep using these names.
 """
 from __future__ import annotations
 
+from agents.wa_agent.assign_models import FanoutCandidate
 from agents.wa_agent.chat import (
     ChatAgent,
     handle_chat_message,
@@ -14,6 +15,7 @@ from agents.wa_agent.chat import (
     is_write_request,
     mentions_bot,
 )
+from agents.wa_agent.fanout import FanoutDispatcher
 from agents.wa_agent.ingestion import (
     BatchResult,
     IngestionPipeline,
@@ -25,6 +27,7 @@ from agents.wa_agent.ingestion import (
     concatenate_same_sender as _concatenate_same_sender,
 )
 from agents.wa_agent.lifecycle import run_lifecycle_for_channel, sunday_stale_nudge
+from agents.wa_agent.member_facts import MemberFactService, render_fact_line
 from agents.wa_agent.messages import BufferedMessage, ThreadInfo
 from agents.wa_agent.proposals import (
     ProposalService,
@@ -48,6 +51,10 @@ __all__ = [
     "ThreadInfo",
     "BatchResult",
     "IngestionPipeline",
+    "FanoutDispatcher",
+    "FanoutCandidate",
+    "MemberFactService",
+    "render_fact_line",
     "ChatAgent",
     "ProposalService",
     "run_batch",
