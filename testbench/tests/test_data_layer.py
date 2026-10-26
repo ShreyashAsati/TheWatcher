@@ -15,7 +15,7 @@ def test_android_24h_basic_multiline_and_system_dropped():
     text = (SAMPLE / "android_drone.txt").read_text()
     msgs, rep = parse_export(text, source="a")
     assert rep.date_order == "dmy" and rep.date_order_basis == "unambiguous"
-    assert rep.system_dropped == 3          # encryption, created group, added Karan
+    assert rep.system_dropped == 3  # encryption, created group, added Karan
     assert rep.deleted_dropped == 1
     first = msgs[0]
     assert first.sender == "Aman Sharma"
@@ -28,7 +28,7 @@ def test_android_24h_basic_multiline_and_system_dropped():
 def test_edited_suffix_and_media_and_phone_sender():
     msgs, rep = parse_export((SAMPLE / "android_drone.txt").read_text())
     by_text = {m.text: m for m in msgs}
-    assert "Uploaded the tuning notes" in by_text            # <This message was edited> stripped
+    assert "Uploaded the tuning notes" in by_text  # <This message was edited> stripped
     media = [m for m in msgs if m.media_kind]
     assert len(media) == 1 and media[0].text == "" and rep.media_only == 1
     assert any(m.sender == "+91 98765 43210" for m in msgs)
@@ -36,22 +36,24 @@ def test_edited_suffix_and_media_and_phone_sender():
 
 def test_iphone_brackets_lrm_and_seconds():
     msgs, rep = parse_export((SAMPLE / "iphone_drone.txt").read_text())
-    assert rep.system_dropped == 3   # encryption notice "from" the group, "created group", "added Karan"
+    assert rep.system_dropped == 3  # encryption notice "from" the group, "created group", "added Karan"
     assert msgs[0].text.startswith("Team, flight controller")
     assert msgs[0].has_seconds and msgs[0].sent_at == IST(2025, 10, 13, 4, 45, 42)
-    assert any(m.media_kind == "image" for m in msgs)       # <attached: ...jpg>
+    assert any(m.media_kind == "image" for m in msgs)  # <attached: ...jpg>
     assert all(not m.sender.startswith("\u200e") for m in msgs)
 
 
 def test_us_locale_12h_narrow_space_month_first():
     msgs, rep = parse_export((SAMPLE / "android_coordis_us.txt").read_text())
     assert rep.date_order == "mdy" and rep.date_order_basis == "unambiguous"
-    assert msgs[0].sent_at == IST(2025, 10, 13, 10, 35)      # 4:05 PM IST
-    assert msgs[2].sent_at == IST(2025, 10, 14, 4, 0)        # 9:30 AM IST
+    assert msgs[0].sent_at == IST(2025, 10, 13, 10, 35)  # 4:05 PM IST
+    assert msgs[2].sent_at == IST(2025, 10, 14, 4, 0)  # 9:30 AM IST
 
 
 def test_ios_media_placeholder_from_lrm_sender_is_not_a_system_event():
-    text = "[13/10/2025, 10:21:00] Aman: \u200eimage omitted\n[13/10/2025, 10:22:00] Aman: \u200eadded Karan\n"
+    text = (
+        "[13/10/2025, 10:21:00] Aman: \u200eimage omitted\n[13/10/2025, 10:22:00] Aman: \u200eadded Karan\n"
+    )
     msgs, rep = parse_export(text)
     assert len(msgs) == 1 and msgs[0].media_kind == "image" and rep.system_dropped == 1
 
@@ -120,7 +122,7 @@ def test_aliases_phone_and_unknown_senders():
     gd = ds.groups[0]
     phones = [p for p in gd.unknown_senders if p.display is None]
     assert len(phones) == 1 and phones[0].wa_identity.endswith("@s.whatsapp.net")
-    assert not any(p.display == "Aman" for p in gd.unknown_senders)   # alias resolved
+    assert not any(p.display == "Aman" for p in gd.unknown_senders)  # alias resolved
     riya = next(m for m in gd.messages if m.person.display == "Riya Verma")
     assert riya.person.wiki_title == "Riya Verma"
 
@@ -132,11 +134,10 @@ def test_include_media_keeps_media_only():
 
 def test_date_range_is_local_and_inclusive():
     ds = load_dataset(SAMPLE, groups=["Drone Project"], date_from="2025-10-14", date_to="2025-10-15")
-    days = {m.sent_at.astimezone().date().isoformat() for m in ds.groups[0].messages}
     texts = [m.text for m in ds.groups[0].messages]
     assert "Uploaded the tuning notes" in texts and "Sharing the ESC datasheet" in " ".join(texts)
-    assert not any("flight controller" in t for t in texts)          # 13 Oct excluded
-    assert not any("own the ESC review" in t for t in texts)         # 16 Oct excluded
+    assert not any("flight controller" in t for t in texts)  # 13 Oct excluded
+    assert not any("own the ESC review" in t for t in texts)  # 16 Oct excluded
     start, end = date_bounds("2025-10-14", "2025-10-14", "Asia/Kolkata")
     assert start == IST(2025, 10, 13, 18, 30) and end == IST(2025, 10, 14, 18, 30)
 
@@ -148,19 +149,22 @@ def test_disabled_group_and_its_exports_skipped():
 
 def test_group_channel_title_and_jid():
     groups = {g.title: g for g in load_groups(SAMPLE / "groups.csv")}
-    assert groups["Drone Project"].channel_title == "Autonomous Drone"   # like /setup project <Title>
+    assert groups["Drone Project"].channel_title == "Autonomous Drone"  # like /setup project <Title>
     assert groups["Drone Project"].jid == "autonomous-drone@g.us"
     assert groups["Coordis"].channel_title == "Coordis" and groups["Coordis"].initiative is None
 
 
-@pytest.mark.parametrize("body,needle", [
-    ("title,kind\nA,logs\n", "logs"),
-    ("title,kind\nA,wizard\n", "not one of"),
-    ("title,kind\nA,coordis\nB,coordis\n", "only one"),
-    ("title,kind\nA,other\nA,other\n", "duplicate"),
-    ("title,kind,initiative\nA,project,X\nB,project,X\n", "share the wiki folder"),
-    ("title,kind\n", "no groups"),
-])
+@pytest.mark.parametrize(
+    "body,needle",
+    [
+        ("title,kind\nA,logs\n", "logs"),
+        ("title,kind\nA,wizard\n", "not one of"),
+        ("title,kind\nA,coordis\nB,coordis\n", "only one"),
+        ("title,kind\nA,other\nA,other\n", "duplicate"),
+        ("title,kind,initiative\nA,project,X\nB,project,X\n", "share the wiki folder"),
+        ("title,kind\n", "no groups"),
+    ],
+)
 def test_groups_csv_errors(tmp_path, body, needle):
     p = tmp_path / "groups.csv"
     p.write_text(body)

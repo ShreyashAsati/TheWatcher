@@ -9,6 +9,7 @@ members.csv columns (header row required; all but `name` optional):
     wa_identity phone number or jid, if known
     aliases     other names seen in exports, separated by ';'
 """
+
 from __future__ import annotations
 
 import csv
@@ -77,7 +78,10 @@ class Roster:
                 if not k:
                     continue
                 if k in self._by_alias and self._by_alias[k] != person:
-                    self.warnings.append(f"alias {alias!r} maps to both {self._by_alias[k].display!r} and {name!r}; keeping the first")
+                    self.warnings.append(
+                        f"alias {alias!r} maps to both {self._by_alias[k].display!r} and {name!r}; "
+                        "keeping the first"
+                    )
                     continue
                 self._by_alias[k] = person
 
@@ -86,7 +90,10 @@ class Roster:
         if path is None or not Path(path).is_file():
             return cls()
         with open(path, newline="", encoding="utf-8-sig") as fh:
-            rows = [{(k or "").strip().lower(): (v or "").strip() for k, v in r.items()} for r in csv.DictReader(fh)]
+            rows = [
+                {(k or "").strip().lower(): (v or "").strip() for k, v in r.items()}
+                for r in csv.DictReader(fh)
+            ]
         return cls(rows)
 
     def resolve(self, raw: str, exporter: str | None = None) -> Person:

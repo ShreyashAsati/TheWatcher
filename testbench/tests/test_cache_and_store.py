@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
+
 # Stand-ins for shared.models.schemas (the real repo isn't importable in unit tests).
 @dataclass
 class TextResult:
@@ -17,6 +18,7 @@ class TextResult:
     cost: float | None = None
     cost_source: str | None = None
 
+
 @dataclass
 class StructuredResult:
     output: object
@@ -24,6 +26,7 @@ class StructuredResult:
     output_tokens: int = 0
     cost: float | None = None
     cost_source: str | None = None
+
 
 for name in ("shared", "shared.models", "shared.models.schemas"):
     sys.modules.setdefault(name, types.ModuleType(name))
@@ -114,7 +117,12 @@ def test_stale_cached_schema_is_a_miss(tmp_path):
     c = CachingClient(inner, store_)
     run(c.generate_structured("a", Out))
     for row in store_._db.execute("SELECT key FROM llm_cache").fetchall():
-        store_.put(row[0], "fake/model", "structured", {"output": '{"wrong": 1}', "input_tokens": 1, "output_tokens": 1})
+        store_.put(
+            row[0],
+            "fake/model",
+            "structured",
+            {"output": '{"wrong": 1}', "input_tokens": 1, "output_tokens": 1},
+        )
     run(c.generate_structured("a", Out))
     assert inner.calls == 2
 
@@ -140,11 +148,15 @@ def test_create_list_reset_clone_delete(home):
     (d / "result.json").write_text("{}")
     assert store.has_outputs(a)
     store.reset(a)
-    assert not store.has_outputs(a) and (d / "config.json").is_file()      # config survives reset
+    assert not store.has_outputs(a) and (d / "config.json").is_file()  # config survives reset
     c = store.clone(a, "variant", env={"ASSIGNMENT_MODE": "jev"}, date_from="2025-10-14")
     cc = store.load_config(c)
-    assert cc.name == "variant" and cc.env == {"BATCH_N": "20", "ASSIGNMENT_MODE": "jev"} and cc.date_from == "2025-10-14"
-    assert store.load_config(a).env == {"BATCH_N": "20"}                     # original untouched
+    assert (
+        cc.name == "variant"
+        and cc.env == {"BATCH_N": "20", "ASSIGNMENT_MODE": "jev"}
+        and cc.date_from == "2025-10-14"
+    )
+    assert store.load_config(a).env == {"BATCH_N": "20"}  # original untouched
     store.delete(b)
     assert store.list_ids() == [a, c]
     with pytest.raises(KeyError):
@@ -159,13 +171,23 @@ def test_env_isolation_and_safety(home):
     assert env["BATCH_N"] == "7"
     assert env["DATABASE_URL"].endswith(str((d / "watcher.db").resolve()))
     assert env["VAULT_ROOT"] == str((d / "vault").resolve())
-    assert env["GOWA_BASE_URL"] == "http://127.0.0.1:9" and env["LAPIS_TOKEN"] == "" and env["OTEL_ENABLED"] == "false"
+    assert (
+        env["GOWA_BASE_URL"] == "http://127.0.0.1:9"
+        and env["LAPIS_TOKEN"] == ""
+        and env["OTEL_ENABLED"] == "false"
+    )
 
 
-@pytest.mark.parametrize("env,needle", [
-    ({"DATABASE_URL": "x"}, "pinned"), ({"GOWA_BASE_URL": "x"}, "pinned"), ({"LAPIS_TOKEN": "x"}, "pinned"),
-    ({"MODELS_API_KEY": "sk-123"}, "secret"), ({"batch_n": "3"}, "UPPER_CASE"),
-])
+@pytest.mark.parametrize(
+    "env,needle",
+    [
+        ({"DATABASE_URL": "x"}, "pinned"),
+        ({"GOWA_BASE_URL": "x"}, "pinned"),
+        ({"LAPIS_TOKEN": "x"}, "pinned"),
+        ({"MODELS_API_KEY": "sk-123"}, "secret"),
+        ({"batch_n": "3"}, "UPPER_CASE"),
+    ],
+)
 def test_config_rejects_dangerous_env(env, needle):
     with pytest.raises(DataError, match=needle):
         _cfg(env=env).validate()

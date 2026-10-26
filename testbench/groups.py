@@ -15,6 +15,7 @@ exports.csv  (one row per exported .txt file; several files per group is normal)
     timezone    IANA tz of the exporter's phone (default: experiment tz)
     dayfirst    dmy | mdy | blank = auto-detect
 """
+
 from __future__ import annotations
 
 import csv
@@ -76,7 +77,10 @@ def load_groups(path: Path) -> list[Group]:
         if not title:
             raise DataError(f"{where}: `title` is empty")
         if kind == "logs":
-            raise DataError(f"{where}: kind 'logs' is not supported in the testbench (the agent would try to send WhatsApp messages)")
+            raise DataError(
+                f"{where}: kind 'logs' is not supported in the testbench "
+                "(the agent would try to send WhatsApp messages)"
+            )
         if kind not in KINDS:
             raise DataError(f"{where}: kind {kind!r} is not one of {', '.join(KINDS)}")
         if row.get("enabled", "").lower() in _FALSE:
@@ -86,16 +90,29 @@ def load_groups(path: Path) -> list[Group]:
         seen_titles.add(title.casefold())
         if kind in SINGLETON_KINDS:
             if kind in singles:
-                raise DataError(f"{where}: only one '{kind}' group is allowed ({singles[kind]!r} is already one)")
+                raise DataError(
+                    f"{where}: only one '{kind}' group is allowed ({singles[kind]!r} is already one)"
+                )
             singles[kind] = title
         initiative = (row.get("initiative") or title) if kind in INITIATIVE_KINDS else None
         channel_title = initiative or title
         if slug(channel_title) in seen_channels:
-            raise DataError(f"{where}: {title!r} and {seen_channels[slug(channel_title)]!r} would share the wiki folder "
-                            f"'{slug(channel_title)}' - give them different initiatives")
+            raise DataError(
+                f"{where}: {title!r} and {seen_channels[slug(channel_title)]!r} would share the wiki folder "
+                f"'{slug(channel_title)}' - give them different initiatives"
+            )
         seen_channels[slug(channel_title)] = title
-        groups.append(Group(title, kind, initiative, row.get("lead") or "Unassigned", row.get("brief", ""),
-                            channel_title, f"{slug(channel_title)}@g.us"))
+        groups.append(
+            Group(
+                title,
+                kind,
+                initiative,
+                row.get("lead") or "Unassigned",
+                row.get("brief", ""),
+                channel_title,
+                f"{slug(channel_title)}@g.us",
+            )
+        )
     if not groups:
         raise DataError(f"{path}: no groups")
     return groups
@@ -126,6 +143,13 @@ def load_exports(path: Path, groups: list[Group], skip: set[str] | None = None) 
         order = row.get("dayfirst", "").lower()
         if order not in ("", "dmy", "mdy"):
             raise DataError(f"{where}: dayfirst must be dmy, mdy or blank")
-        specs.append(ExportSpec(p, by_title[group.casefold()].title, row.get("exporter") or None,
-                                row.get("timezone") or None, None if not order else order == "dmy"))
+        specs.append(
+            ExportSpec(
+                p,
+                by_title[group.casefold()].title,
+                row.get("exporter") or None,
+                row.get("timezone") or None,
+                None if not order else order == "dmy",
+            )
+        )
     return specs

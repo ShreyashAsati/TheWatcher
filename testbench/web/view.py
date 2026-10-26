@@ -7,6 +7,7 @@ A message belongs to a thread if its id is in the thread's `message_ids`
 frontmatter or appears as a `[src:: id]` tag in the page body. Anything in
 no thread is shown as chatter/unassigned.
 """
+
 from __future__ import annotations
 
 import json
@@ -72,13 +73,20 @@ def load_threads(vault: Path) -> list[dict]:
             continue
         ids = list(meta.get("message_ids") or [])
         ids += [i.strip() for tag in _SRC.findall(body) for i in re.split(r"[,\s]+", tag) if i.strip()]
-        out.append({
-            "slug": p.stem, "path": p.relative_to(vault).as_posix(), "title": meta.get("title") or p.stem,
-            "state": meta.get("state") or "active", "summary": _summary(body),
-            "participants": meta.get("participants") or [], "opened_at": meta.get("opened_at"),
-            "last_message_at": meta.get("last_message_at"), "archived": "/archive/" in p.as_posix(),
-            "ids": sorted(set(ids)),
-        })
+        out.append(
+            {
+                "slug": p.stem,
+                "path": p.relative_to(vault).as_posix(),
+                "title": meta.get("title") or p.stem,
+                "state": meta.get("state") or "active",
+                "summary": _summary(body),
+                "participants": meta.get("participants") or [],
+                "opened_at": meta.get("opened_at"),
+                "last_message_at": meta.get("last_message_at"),
+                "archived": "/archive/" in p.as_posix(),
+                "ids": sorted(set(ids)),
+            }
+        )
     return out
 
 
@@ -96,9 +104,19 @@ def list_channels(exp_dir: Path) -> list[dict]:
     if con is None:
         return []
     try:
-        counts = {r["channel"]: r["n"] for r in con.execute("SELECT channel, COUNT(*) n FROM messages_buffer GROUP BY channel")}
-        return [{"jid": r["jid"], "title": r["title"] or r["jid"], "kind": r["kind"], "messages": counts.get(r["jid"], 0)}
-                for r in con.execute("SELECT jid, title, kind FROM channels WHERE kind != 'unset' ORDER BY id")]
+        counts = {
+            r["channel"]: r["n"]
+            for r in con.execute("SELECT channel, COUNT(*) n FROM messages_buffer GROUP BY channel")
+        }
+        return [
+            {
+                "jid": r["jid"],
+                "title": r["title"] or r["jid"],
+                "kind": r["kind"],
+                "messages": counts.get(r["jid"], 0),
+            }
+            for r in con.execute("SELECT jid, title, kind FROM channels WHERE kind != 'unset' ORDER BY id")
+        ]
     except sqlite3.Error:
         return []
     finally:
@@ -112,7 +130,9 @@ def build_stream(exp_dir: Path, jid: str) -> dict:
         return {"channel": None, "threads": [], "messages": []}
     try:
         ch = con.execute("SELECT jid, title, kind FROM channels WHERE jid=?", (jid,)).fetchone()
-        rows = con.execute("SELECT message_id, payload FROM messages_buffer WHERE channel=? ORDER BY id", (jid,)).fetchall()
+        rows = con.execute(
+            "SELECT message_id, payload FROM messages_buffer WHERE channel=? ORDER BY id", (jid,)
+        ).fetchall()
     except sqlite3.Error:
         return {"channel": None, "threads": [], "messages": []}
     finally:
@@ -124,9 +144,18 @@ def build_stream(exp_dir: Path, jid: str) -> dict:
     messages = []
     for r in rows:
         p = json.loads(r["payload"]).get("payload", {})
-        messages.append({"id": r["message_id"], "t": p.get("timestamp"), "who": p.get("from_name") or "(no name)",
-                         "text": p.get("body", ""), "media": next((k for k in ("image", "video", "audio", "sticker", "document") if p.get(k)), None),
-                         "thread": owner.get(r["message_id"])})
+        messages.append(
+            {
+                "id": r["message_id"],
+                "t": p.get("timestamp"),
+                "who": p.get("from_name") or "(no name)",
+                "text": p.get("body", ""),
+                "media": next(
+                    (k for k in ("image", "video", "audio", "sticker", "document") if p.get(k)), None
+                ),
+                "thread": owner.get(r["message_id"]),
+            }
+        )
     counts: dict[str, int] = {}
     for m in messages:
         if m["thread"]:
@@ -135,5 +164,9 @@ def build_stream(exp_dir: Path, jid: str) -> dict:
         t["messages"] = counts.get(t["slug"], 0)
         del t["ids"]
     threads.sort(key=lambda t: t.get("opened_at") or "")
-    return {"channel": {"jid": jid, "title": title, "kind": ch["kind"] if ch else None}, "threads": threads,
-            "messages": messages, "unassigned": sum(1 for m in messages if not m["thread"])}
+    return {
+        "channel": {"jid": jid, "title": title, "kind": ch["kind"] if ch else None},
+        "threads": threads,
+        "messages": messages,
+        "unassigned": sum(1 for m in messages if not m["thread"]),
+    }

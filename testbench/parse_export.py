@@ -19,6 +19,7 @@ Handles
 Timestamps in an export carry no timezone; they are interpreted in `tz`
 (default Asia/Kolkata) and returned as aware UTC datetimes.
 """
+
 from __future__ import annotations
 
 import re
@@ -70,14 +71,32 @@ _MEDIA = re.compile(
 _ATTACHED = re.compile(r"^<attached:\s*(?P<f>[^>]+)>$|^(?P<f2>.+?)\s*\(file attached\)$", re.IGNORECASE)
 
 _MEDIA_WORDS = {
-    "media": "image", "image": "image", "video": "video", "audio": "audio", "sticker": "sticker",
-    "gif": "video", "document": "document", "contact card": "document",
-    "voice message": "audio", "video note": "video_note",
+    "media": "image",
+    "image": "image",
+    "video": "video",
+    "audio": "audio",
+    "sticker": "sticker",
+    "gif": "video",
+    "document": "document",
+    "contact card": "document",
+    "voice message": "audio",
+    "video note": "video_note",
 }
 _EXT_KIND = {
-    "jpg": "image", "jpeg": "image", "png": "image", "heic": "image", "webp": "image",
-    "mp4": "video", "mov": "video", "3gp": "video", "mkv": "video",
-    "opus": "audio", "m4a": "audio", "mp3": "audio", "ogg": "audio", "aac": "audio",
+    "jpg": "image",
+    "jpeg": "image",
+    "png": "image",
+    "heic": "image",
+    "webp": "image",
+    "mp4": "video",
+    "mov": "video",
+    "3gp": "video",
+    "mkv": "video",
+    "opus": "audio",
+    "m4a": "audio",
+    "mp3": "audio",
+    "ogg": "audio",
+    "aac": "audio",
 }
 
 
@@ -160,7 +179,8 @@ def _detect_order(triples: list[tuple[int, int, int]], default_dayfirst: bool) -
         return dmy < mdy, "chronology", warnings
     warnings.append(
         "date order is ambiguous in this file (all numbers <= 12 and both orders look chronological); "
-        f"assuming {'day-first' if default_dayfirst else 'month-first'} - set dayfirst in exports.csv to override"
+        f"assuming {'day-first' if default_dayfirst else 'month-first'} - "
+        "set dayfirst in exports.csv to override"
     )
     return default_dayfirst, "default", warnings
 
@@ -195,7 +215,9 @@ def parse_export(
             triples.append((int(m["d1"]), int(m["d2"]), int(m["d3"])))
 
     if dayfirst is None:
-        dayfirst, basis, warns = _detect_order(triples, default_dayfirst) if triples else (default_dayfirst, "default", [])
+        dayfirst, basis, warns = (
+            _detect_order(triples, default_dayfirst) if triples else (default_dayfirst, "default", [])
+        )
         report.warnings += warns
     else:
         basis = "forced"
@@ -251,17 +273,30 @@ def parse_export(
         if m is not None and dt is not None:
             flush()
             parts = _split_sender(m["rest"])
-            if parts is None or _SYSTEM_SENDER.search(parts[0]) or '"' in parts[0] or len(parts[0].split()) > 6:
+            if (
+                parts is None
+                or _SYSTEM_SENDER.search(parts[0])
+                or '"' in parts[0]
+                or len(parts[0].split()) > 6
+            ):
                 report.system_dropped += 1
                 continue
             body0 = parts[1].strip()
             is_media = bool(_MEDIA.match(body0) or _ATTACHED.match(body0))
-            ios_event = ": \u200e" in raw_lines[no - 1] and not is_media and bool(_SYSTEM_BODY_IOS.match(body0))
+            ios_event = (
+                ": \u200e" in raw_lines[no - 1] and not is_media and bool(_SYSTEM_BODY_IOS.match(body0))
+            )
             if ios_event or _ENCRYPTION.search(body0.split("\n")[0]):
                 report.system_dropped += 1
                 continue
             sender = parts[0].lstrip("~ ").strip()
-            cur = {"sender": sender, "dt": dt, "lines": [parts[1]], "has_seconds": m["s"] is not None, "line_no": no}
+            cur = {
+                "sender": sender,
+                "dt": dt,
+                "lines": [parts[1]],
+                "has_seconds": m["s"] is not None,
+                "line_no": no,
+            }
         elif cur is not None:
             cur["lines"].append(ln)
     flush()

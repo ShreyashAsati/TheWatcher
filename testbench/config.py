@@ -1,4 +1,5 @@
 """An experiment = a JSON config + its own folder. No `shared/` imports."""
+
 from __future__ import annotations
 
 import json
@@ -24,10 +25,14 @@ class ExperimentConfig:
     date_from: str | None = None  # inclusive, local date YYYY-MM-DD
     date_to: str | None = None  # inclusive
     timezone: str = "Asia/Kolkata"
-    env: dict[str, str] = field(default_factory=dict)  # Settings overrides, e.g. {"ASSIGNMENT_MODE": "jev", "BATCH_N": "20"}
+    env: dict[str, str] = field(
+        default_factory=dict
+    )  # Settings overrides, e.g. {"ASSIGNMENT_MODE": "jev", "BATCH_N": "20"}
     cache: bool = True  # reuse stored LLM answers (identical prompt+model => free, deterministic)
     include_media: bool = False  # feed media-only messages (empty text) to the agent
-    lifecycle_days_after: float | None = None  # after replay, run the stale/archive pass at last message + N days
+    lifecycle_days_after: float | None = (
+        None  # after replay, run the stale/archive pass at last message + N days
+    )
     seed_vault: str | None = None  # folder copied in as the starting wiki (optional)
     notes: str = ""
     created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat(timespec="seconds"))
@@ -50,7 +55,9 @@ class ExperimentConfig:
             if key.startswith(_FORBIDDEN_PREFIXES):
                 raise DataError(f"env key {key} is pinned by the testbench and cannot be overridden")
             if any(w in key for w in _SECRET_WORDS):
-                raise DataError(f"env key {key} looks like a secret - keep it in the environment/.env, not in config.json")
+                raise DataError(
+                    f"env key {key} looks like a secret - keep it in the environment/.env, not in config.json"
+                )
             if not isinstance(value, str):
                 raise DataError(f"env {key} must be a string")
         if self.seed_vault and not Path(self.seed_vault).is_dir():

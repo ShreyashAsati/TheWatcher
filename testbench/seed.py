@@ -4,6 +4,7 @@ member pages, and member links for everyone `members.csv` gives a wiki_title.
 
 Imports `shared/` - only ever imported from inside the runner subprocess.
 """
+
 from __future__ import annotations
 
 from shared.gateway.channels import link_member
@@ -32,8 +33,11 @@ async def seed_group(vault: VaultClient, gd: GroupData, roster_titles: set[str])
     g = gd.group
     if g.kind in ("project", "event"):
         render = render_new_project_page if g.kind == "project" else render_new_event_page
-        await _create_once(vault, initiative_page_path(g.kind, g.initiative or g.title),
-                           render(g.initiative or g.title, lead=g.lead, brief=g.brief))
+        await _create_once(
+            vault,
+            initiative_page_path(g.kind, g.initiative or g.title),
+            render(g.initiative or g.title, lead=g.lead, brief=g.brief),
+        )
     await register_channel(vault, g.jid, g.kind, g.channel_title, g.initiative)
 
     titles = {m.person.wiki_title for m in gd.messages if m.person.wiki_title}

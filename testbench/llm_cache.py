@@ -10,6 +10,7 @@ count it as spend; the original tokens/cost are kept in `saved_*` counters.
 `shared.models.schemas` is imported lazily so this module can be unit-tested
 without the Watcher repo.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -56,13 +57,21 @@ class CachingClient:
         self.saved_input_tokens = self.saved_output_tokens = 0
         self.saved_cost = 0.0
 
-    def __getattr__(self, name: str) -> Any:  # model_settings etc.; generate_with_tools passes straight through
+    def __getattr__(
+        self, name: str
+    ) -> Any:  # model_settings etc.; generate_with_tools passes straight through
         return getattr(self._inner, name)
 
     def stats(self) -> dict:
-        return {"label": self.label, "model": self.model_name, "hits": self.hits, "misses": self.misses,
-                "saved_input_tokens": self.saved_input_tokens, "saved_output_tokens": self.saved_output_tokens,
-                "saved_cost_usd": round(self.saved_cost, 6)}
+        return {
+            "label": self.label,
+            "model": self.model_name,
+            "hits": self.hits,
+            "misses": self.misses,
+            "saved_input_tokens": self.saved_input_tokens,
+            "saved_output_tokens": self.saved_output_tokens,
+            "saved_cost_usd": round(self.saved_cost, 6),
+        }
 
     def _hit(self, cached: dict) -> None:
         self.hits += 1
@@ -77,18 +86,36 @@ class CachingClient:
         cached = self._store.get(key) if self._store else None
         if cached:
             self._hit(cached)
-            return TextResult(text=cached["text"], input_tokens=0, output_tokens=0, cost=0.0, cost_source="cached")
+            return TextResult(
+                text=cached["text"], input_tokens=0, output_tokens=0, cost=0.0, cost_source="cached"
+            )
         self.misses += 1
         res = await self._inner.generate(prompt, system=system)
         if self._store:
-            self._store.put(key, self.model_name, "text", {
-                "text": res.text, "input_tokens": res.input_tokens, "output_tokens": res.output_tokens, "cost": res.cost})
+            self._store.put(
+                key,
+                self.model_name,
+                "text",
+                {
+                    "text": res.text,
+                    "input_tokens": res.input_tokens,
+                    "output_tokens": res.output_tokens,
+                    "cost": res.cost,
+                },
+            )
         return res
 
     async def generate_structured(self, prompt: str, output_type: type, system: str | None = None):
         from shared.models.schemas import StructuredResult
 
-        key = _key("structured", self.model_name, system or "", prompt, output_type.__name__, output_type.model_json_schema())
+        key = _key(
+            "structured",
+            self.model_name,
+            system or "",
+            prompt,
+            output_type.__name__,
+            output_type.model_json_schema(),
+        )
         cached = self._store.get(key) if self._store else None
         if cached:
             try:
@@ -97,11 +124,21 @@ class CachingClient:
                 cached = None
         if cached:
             self._hit(cached)
-            return StructuredResult(output=output, input_tokens=0, output_tokens=0, cost=0.0, cost_source="cached")
+            return StructuredResult(
+                output=output, input_tokens=0, output_tokens=0, cost=0.0, cost_source="cached"
+            )
         self.misses += 1
         res = await self._inner.generate_structured(prompt, output_type, system=system)
         if self._store:
-            self._store.put(key, self.model_name, "structured", {
-                "output": res.output.model_dump_json(), "input_tokens": res.input_tokens,
-                "output_tokens": res.output_tokens, "cost": res.cost})
+            self._store.put(
+                key,
+                self.model_name,
+                "structured",
+                {
+                    "output": res.output.model_dump_json(),
+                    "input_tokens": res.input_tokens,
+                    "output_tokens": res.output_tokens,
+                    "cost": res.cost,
+                },
+            )
         return res

@@ -2,6 +2,7 @@
 
 Binds to 127.0.0.1 only: the data is real chat content.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -46,8 +47,18 @@ def experiments():
         except Exception:  # noqa: BLE001
             continue
         st = store.status(i)
-        out.append({"id": i, "name": cfg.name, "state": st["state"], "created_at": cfg.created_at,
-                    "groups": cfg.groups, "date_from": cfg.date_from, "date_to": cfg.date_to, "env": cfg.env})
+        out.append(
+            {
+                "id": i,
+                "name": cfg.name,
+                "state": st["state"],
+                "created_at": cfg.created_at,
+                "groups": cfg.groups,
+                "date_from": cfg.date_from,
+                "date_to": cfg.date_to,
+                "env": cfg.env,
+            }
+        )
     return out[::-1]
 
 
@@ -55,11 +66,20 @@ def experiments():
 def experiment(exp_id: str):
     d = _exp(exp_id)
     res = store.result(exp_id) or {}
-    return {"id": exp_id, "config": store.load_config(exp_id).__dict__, "status": store.status(exp_id),
-            "progress": store.progress(exp_id, 8), "channels": view.list_channels(d),
-            "errors": res.get("errors", []), "settings": res.get("settings"), "model_usage": res.get("model_usage"),
-            "cache": res.get("cache"), "wakes": res.get("wakes", []), "inbox": res.get("inbox", {}),
-            "warnings": res.get("dataset_warnings", [])}
+    return {
+        "id": exp_id,
+        "config": store.load_config(exp_id).__dict__,
+        "status": store.status(exp_id),
+        "progress": store.progress(exp_id, 8),
+        "channels": view.list_channels(d),
+        "errors": res.get("errors", []),
+        "settings": res.get("settings"),
+        "model_usage": res.get("model_usage"),
+        "cache": res.get("cache"),
+        "wakes": res.get("wakes", []),
+        "inbox": res.get("inbox", {}),
+        "warnings": res.get("dataset_warnings", []),
+    }
 
 
 @app.get("/api/experiments/{exp_id}/stream")
@@ -77,10 +97,25 @@ def page(exp_id: str, path: str):
 
 
 @app.post("/api/experiments")
-def create(body: dict = Body(...)):
-    fields = {k: body.get(k) for k in ("name", "data_dir", "groups", "date_from", "date_to", "timezone", "env",
-                                       "cache", "include_media", "lifecycle_days_after", "seed_vault", "notes")
-              if body.get(k) not in (None, "")}
+def create(body: dict = Body(...)):  # noqa: B008
+    fields = {
+        k: body.get(k)
+        for k in (
+            "name",
+            "data_dir",
+            "groups",
+            "date_from",
+            "date_to",
+            "timezone",
+            "env",
+            "cache",
+            "include_media",
+            "lifecycle_days_after",
+            "seed_vault",
+            "notes",
+        )
+        if body.get(k) not in (None, "")
+    }
     cfg = ExperimentConfig(name=fields.pop("name", ""), data_dir=fields.pop("data_dir", ""), **fields)
     return {"id": _guard(store.create, cfg)}
 
@@ -106,10 +141,18 @@ def stop(exp_id: str):
 
 
 @app.post("/api/experiments/{exp_id}/clone")
-def clone(exp_id: str, body: dict = Body(default={})):
+def clone(exp_id: str, body: dict = Body(default={})):  # noqa: B008
     _exp(exp_id)
-    return {"id": _guard(store.clone, exp_id, body.get("name"), env=body.get("env") or {},
-                         date_from=body.get("date_from"), date_to=body.get("date_to"))}
+    return {
+        "id": _guard(
+            store.clone,
+            exp_id,
+            body.get("name"),
+            env=body.get("env") or {},
+            date_from=body.get("date_from"),
+            date_to=body.get("date_to"),
+        )
+    }
 
 
 @app.delete("/api/experiments/{exp_id}")

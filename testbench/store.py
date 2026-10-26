@@ -11,6 +11,7 @@
 No `shared/` imports: the runner is a *subprocess* started with this experiment's
 environment, which is what isolates experiments from each other and from the real system.
 """
+
 from __future__ import annotations
 
 import json
@@ -26,7 +27,16 @@ from testbench.config import ExperimentConfig
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HOME = Path(os.environ.get("TESTBENCH_HOME") or REPO_ROOT / "testbench_data")
-OUTPUTS = ("watcher.db", "watcher.db-wal", "watcher.db-shm", "vault", "status.json", "progress.jsonl", "result.json", "run.log")
+OUTPUTS = (
+    "watcher.db",
+    "watcher.db-wal",
+    "watcher.db-shm",
+    "vault",
+    "status.json",
+    "progress.jsonl",
+    "result.json",
+    "run.log",
+)
 _ID = re.compile(r"^exp-(\d{3,})$")
 
 
@@ -88,7 +98,11 @@ def status(exp_id: str) -> dict:
     f = d / "status.json"
     st = json.loads(f.read_text()) if f.is_file() else {"state": "new"}
     if st.get("state") == "running" and not _alive(st.get("pid")):
-        st = {**st, "state": "crashed", "error": st.get("error") or f"runner exited unexpectedly - see {d / 'run.log'}"}
+        st = {
+            **st,
+            "state": "crashed",
+            "error": st.get("error") or f"runner exited unexpectedly - see {d / 'run.log'}",
+        }
     return st
 
 
@@ -112,7 +126,8 @@ def build_env(cfg: ExperimentConfig, d: Path) -> dict[str, str]:
         VAULT_ROOT=str((d / "vault").resolve()),
         OTEL_ENABLED="false",
         LAPIS_TOKEN="",
-        GOWA_BASE_URL="http://127.0.0.1:9",  # nothing listens here: an accidental send fails instead of messaging real people
+        # nothing listens here: an accidental send fails instead of messaging real people
+        GOWA_BASE_URL="http://127.0.0.1:9",
         GOWA_BASIC_AUTH="",
         PYDANTIC_AI_NO_BANNER="1",
         TESTBENCH_EXPERIMENT_DIR=str(d.resolve()),
@@ -137,11 +152,17 @@ def start(exp_id: str, rerun: bool = False) -> int:
         if not rerun:
             raise RuntimeError(f"{exp_id} already has results; reset it, clone it, or pass rerun=True")
         reset(exp_id)
-    (d / "status.json").write_text(json.dumps({"state": "queued", "queued_at": datetime.now(UTC).isoformat()}))
+    (d / "status.json").write_text(
+        json.dumps({"state": "queued", "queued_at": datetime.now(UTC).isoformat()})
+    )
     log = open(d / "run.log", "ab")
     proc = subprocess.Popen(
         [sys.executable, "-m", "testbench.run", str(d)],
-        cwd=REPO_ROOT, env=build_env(cfg, d), stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
+        cwd=REPO_ROOT,
+        env=build_env(cfg, d),
+        stdout=log,
+        stderr=subprocess.STDOUT,
+        start_new_session=True,
     )
     return proc.pid
 
@@ -185,5 +206,7 @@ def stop(exp_id: str) -> bool:
     if st.get("state") != "running" or not _alive(st.get("pid")):
         return False
     os.killpg(os.getpgid(st["pid"]), signal.SIGTERM)
-    (exp_dir(exp_id) / "status.json").write_text(json.dumps({**st, "state": "stopped", "finished_at": datetime.now(UTC).isoformat()}))
+    (exp_dir(exp_id) / "status.json").write_text(
+        json.dumps({**st, "state": "stopped", "finished_at": datetime.now(UTC).isoformat()})
+    )
     return True

@@ -9,6 +9,7 @@ iPhone export the copy with seconds wins.
 
 Pure standard library: no `shared/` imports.
 """
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -52,7 +53,9 @@ def _canon(text: str) -> str:
     return " ".join(text.split()).casefold()
 
 
-def date_bounds(date_from: str | None, date_to: str | None, tz: str) -> tuple[datetime | None, datetime | None]:
+def date_bounds(
+    date_from: str | None, date_to: str | None, tz: str
+) -> tuple[datetime | None, datetime | None]:
     """Inclusive local dates -> [start, end) as aware UTC datetimes."""
     zone = ZoneInfo(tz)
 
@@ -63,7 +66,11 @@ def date_bounds(date_from: str | None, date_to: str | None, tz: str) -> tuple[da
             raise DataError(f"bad date {v!r}: use YYYY-MM-DD") from None
 
     start = datetime.combine(parse(date_from), time.min, zone).astimezone(UTC) if date_from else None
-    end = datetime.combine(parse(date_to) + timedelta(days=1), time.min, zone).astimezone(UTC) if date_to else None
+    end = (
+        datetime.combine(parse(date_to) + timedelta(days=1), time.min, zone).astimezone(UTC)
+        if date_to
+        else None
+    )
     return start, end
 
 
@@ -108,11 +115,18 @@ def load_dataset(
             warnings.append(f"group {group.title!r} has no export files in exports.csv")
 
         # key -> {file index -> [(file idx, msg, person)]}
-        by_key: dict[tuple, dict[int, list[tuple[ParsedMessage, Person]]]] = defaultdict(lambda: defaultdict(list))
+        by_key: dict[tuple, dict[int, list[tuple[ParsedMessage, Person]]]] = defaultdict(
+            lambda: defaultdict(list)
+        )
         for i, (spec, msgs) in enumerate(files):
             for m in msgs:
                 person = roster.resolve(m.sender, spec.exporter)
-                key = (m.sent_at.replace(second=0, microsecond=0), person.key, _canon(m.text), m.media_kind or "")
+                key = (
+                    m.sent_at.replace(second=0, microsecond=0),
+                    person.key,
+                    _canon(m.text),
+                    m.media_kind or "",
+                )
                 by_key[key][i].append((m, person))
 
         merged: list[tuple[int, Msg, int]] = []
